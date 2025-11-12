@@ -4,29 +4,144 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>OHLA GPT</title>
+
   <style>
-    body { font-family: Arial, sans-serif; background: #f5f6fa; margin: 0; padding: 0; }
-    header { background: #1e293b; color: white; padding: 12px 20px; font-size: 20px; }
-    .chat-container { max-width: 800px; margin: 40px auto; background: white; border-radius: 10px; box-shadow: 0 0 8px rgba(0,0,0,0.1); padding: 20px; }
-    .messages { height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; padding: 10px; background: #fafafa; margin-bottom: 10px; }
-    .msg { padding: 10px; border-radius: 6px; margin: 6px 0; }
-    .msg.user { background: #e0f7ff; }
-    .msg.bot { background: #eef0f3; }
-    .input-area { display: flex; gap: 10px; }
-    input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 16px; }
-    button { background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-size: 16px; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      margin: 0;
+      background: #f6f7f9;
+    }
+
+    /* --- Header --- */
+    header {
+      background: #0b2545;            /* deep navy */
+      color: #fff;
+      padding: 14px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    header .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      font-size: 20px;
+      letter-spacing: 0.5px;
+    }
+
+    header img {
+      height: 40px;
+      border-radius: 8px;
+    }
+
+    .btn {
+      padding: 8px 12px;
+      border: 0;
+      border-radius: 8px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #1d4ed8; }
+    .btn.secondary { background: #6b7280; }
+    .btn.secondary:hover { background: #4b5563; }
+
+    /* --- Layout --- */
+    .container {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 0 16px;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 18px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+      padding: 18px;
+    }
+
+    .muted { color: #6b7280; }
+
+    .file { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; }
+    .file:hover { background: #f1f5f9; }
+
+    .files-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .filelist { max-height: 420px; overflow: auto; }
+
+    /* --- Chat --- */
+    .chat { height: 520px; display: flex; flex-direction: column; }
+    .messages { flex: 1; overflow: auto; padding: 8px; }
+    .msg { background: #f9fafb; border-radius: 12px; padding: 10px 12px; margin: 6px 0; }
+    .msg.me { background: #e0f2fe; }
+    .composer { display: flex; gap: 8px; }
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      font-size: 15px;
+    }
+
+    textarea { resize: vertical; }
+
+    hr { border: none; border-top: 1px solid #e5e7eb; margin: 14px 0; }
   </style>
 </head>
 <body>
-  <header>OHLA GPT</header>
-  <div class="chat-container">
-    <div class="messages" id="messages"></div>
-    <div class="input-area">
-      <input type="text" id="question" placeholder="Ask a question..." />
-      <button id="sendBtn">Send</button>
+  <header>
+    <div class="brand">
+      <img src="logo.png" alt="OHLA GPT Logo" />
+      <span>OHLA GPT</span>
+    </div>
+    <div id="authArea"></div>
+  </header>
+
+  <div class="container">
+    <!-- Left card -->
+    <div class="card">
+      <div class="files-header">
+        <h3>Select Files (Mode A)</h3>
+        <button class="btn secondary" id="refreshBtn">Refresh</button>
+      </div>
+      <div class="muted" style="margin-bottom:8px">
+        Log in with Google and select Drive files (Mode A), or paste public Drive links (Mode B).
+      </div>
+      <div id="fileList" class="filelist"></div>
+
+      <hr/>
+      <div>
+        <h3>Public Links (Mode B)</h3>
+        <div class="muted" style="margin-bottom:8px">
+          Paste Google Drive file or folder links shared as “Anyone with the link (Viewer)”.
+        </div>
+        <textarea id="publicLinks" rows="6"
+          placeholder="https://drive.google.com/file/d/FILE_ID/view&#10;https://docs.google.com/document/d/DOC_ID/edit"></textarea>
+
+        <div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
+          <input id="folderUrl" placeholder="Paste Google Drive FOLDER link"
+                 style="flex:1; padding:10px; border:1px solid #e5e7eb; border-radius:10px;" />
+          <button class="btn secondary" id="addFolderBtn">Add from Folder</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat card -->
+    <div class="card chat">
+      <div class="messages" id="messages"></div>
+      <div class="composer">
+        <input id="question" placeholder="Ask a question..." />
+        <button class="btn" id="sendBtn">Send</button>
+      </div>
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>
