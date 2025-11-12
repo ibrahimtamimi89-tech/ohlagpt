@@ -14,19 +14,27 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
+// ================== CONFIG ==================
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// ==== fixed Drive folder (hidden) ====
-const FIXED_FOLDER_URL = 'https://drive.google.com/drive/folders/1YQmBC9LXDdMe9qm4G0wnUZToMBmDM7wB?usp=sharing';
-// ==== password (as requested) ====
+// Fixed public Drive folder (hidden)
+const FIXED_FOLDER_URL =
+  'https://drive.google.com/drive/folders/1YQmBC9LXDdMe9qm4G0wnUZToMBmDM7wB?usp=sharing';
+
+// Site password (gate to view the site)
 const APP_PASSWORD = 'tamimi202';
 
-// ---------------- helpers ----------------
+// Admin password for finance questions (use the same for now)
+const FINANCE_PASSWORD = 'tamimi202';
+
+// ===========================================
+
+// ---------- tiny fetch helpers ----------
 function httpsGet(url) {
   return new Promise((resolve, reject) => {
     https.get(url, (res) => {
       const chunks = [];
-      res.on('data', d => chunks.push(d));
+      res.on('data', (d) => chunks.push(d));
       res.on('end', () => {
         const buf = Buffer.concat(chunks);
         if (res.statusCode >= 200 && res.statusCode < 300) resolve({ body: buf });
@@ -36,6 +44,7 @@ function httpsGet(url) {
   });
 }
 
+// ---------- Drive scraping ----------
 async function expandPublicFolderToLinks(folderUrl) {
   try {
     const r = await httpsGet(folderUrl);
@@ -49,9 +58,10 @@ async function expandPublicFolderToLinks(folderUrl) {
     ];
     for (const rx of rxes) { let m; while ((m = rx.exec(html))) ids.add(m[1]); }
     return [...ids].map(id => `https://drive.google.com/file/d/${id}/view`);
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
-
 function extractDriveId(s) {
   const rxes = [
     /\/d\/([a-zA-Z0-9_-]{10,})/,
@@ -59,10 +69,9 @@ function extractDriveId(s) {
     /file\/d\/([a-zA-Z0-9_-]{10,})/,
     /^([a-zA-Z0-9_-]{15,})$/
   ];
-  for (const rx of rxes) { const m = (s||'').match(rx); if (m) return m[1]; }
+  for (const rx of rxes) { const m = (s || '').match(rx); if (m) return m[1]; }
   return null;
 }
-
 async function exportPublicDocTxt(id) {
   const r = await httpsGet(`https://docs.google.com/document/d/${id}/export?format=txt`);
   return r.body.toString('utf8');
@@ -79,13 +88,18 @@ async function downloadPublicBinary(id) {
 async function buildContextFromPublicLinks(links = []) {
   const out = [];
   for (const raw of links) {
-    const id = extractDriveId((raw||'').trim());
+    const id = extractDriveId((raw || '').trim());
     if (!id) continue;
     let handled = false;
-    try { const t = await exportPublicDocTxt(id); if (t?.trim()) { out.push(`\n===== DOC ${id} =====\n${t}`); handled = true; } } catch {}
+
+    try { const t = await exportPublicDocTxt(id);
+      if (t?.trim()) { out.push(`\n===== DOC ${id} =====\n${t}`); handled = true; } } catch {}
     if (handled) continue;
-    try { const t = await exportPublicSheetCsv(id); if (t?.trim()) { out.push(`\n===== SHEET ${id} =====\n${t}`); handled = true; } } catch {}
+
+    try { const t = await exportPublicSheetCsv(id);
+      if (t?.trim()) { out.push(`\n===== SHEET ${id} =====\n${t}`); handled = true; } } catch {}
     if (handled) continue;
+
     try {
       const buf = await downloadPublicBinary(id);
       try {
@@ -101,7 +115,7 @@ async function buildContextFromPublicLinks(links = []) {
   return out.join('\n').slice(0, 180000);
 }
 
-// cache Drive list
+// Cache the folder listing for 6h
 let cachedLinks = []; let lastRefresh = 0;
 async function getCachedLinks() {
   const now = Date.now();
@@ -114,7 +128,7 @@ async function getCachedLinks() {
   return cachedLinks;
 }
 
-// -------- policies --------
+// ---------- policies ----------
 const financialRegex = new RegExp(
   [
     'financial','finance','cost','costs','price','prices','pricing','budget','budgets','estimate','estimation',
@@ -124,77 +138,141 @@ const financialRegex = new RegExp(
   ].join('|'),'i'
 );
 const platformProbeRegex = /(openai|api key|api provider|gpt|model name|who hosts you|are you connected|google drive|drive link|data source)/i;
+const smallTalkRegex = /(hello|hi|hey|good (morning|afternoon|evening)|help\b|test\b)$/i;
 
-// -------- password routes & guard --------
+// ---------- password endpoints ----------
 app.post('/api/login', (req, res) => {
   try {
     const { password } = req.body || {};
     if (password && password === APP_PASSWORD) {
-      res.cookie('auth','ok',{ httpOnly:true, sameSite:'lax', secure:process.env.NODE_ENV==='production', maxAge:24*60*60*1000 });
-      return res.json({ ok:true });
+      res.cookie('auth', 'ok', {
+        httpOnly: true, sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 24*60*60*1000
+      });
+      return res.json({ ok: true });
     }
-    res.status(401).json({ error:'Invalid password' });
-  } catch { res.status(500).json({ error:'Login failed' }); }
+    res.status(401).json({ error: 'Invalid password' });
+  } catch {
+    res.status(500).json({ error: 'Login failed' });
+  }
 });
 
-// protect everything HTML/API except login & static assets (added later)
+// finance auth cookie (short lived)
+app.post('/api/finance-auth', (req, res) => {
+  try {
+    const { password } = req.body || {};
+    if (password && password === FINANCE_PASSWORD) {
+      res.cookie('fin', 'ok', {
+        httpOnly: true, sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 15*60*1000 // 15 minutes
+      });
+      return res.json({ ok: true });
+    }
+    res.status(401).json({ error: 'Invalid finance password' });
+  } catch {
+    res.status(500).json({ error: 'Finance auth failed' });
+  }
+});
+
+// ---------- auth guard (before static) ----------
 app.use((req, res, next) => {
-  // allow login API
-  if (req.method==='POST' && req.path==='/api/login') return next();
-  // allow static files (they’ll be mounted at /static)
-  if (req.path.startsWith('/static/') || req.path==='/favicon.ico') return next();
-  // allow login page
-  if (req.path==='/login') return next();
+  if (req.method === 'POST' && (req.path === '/api/login' || req.path === '/api/finance-auth')) return next();
+  if (req.path.startsWith('/static/') || req.path === '/favicon.ico' || req.path === '/login') return next();
 
   const authed = req.headers.cookie && req.headers.cookie.includes('auth=ok');
   if (!authed) {
-    if (req.method==='GET') return res.sendFile(path.join(__dirname,'public','login.html'));
-    return res.status(403).json({ error:'Access denied' });
+    if (req.method === 'GET') return res.sendFile(path.join(__dirname, 'public', 'login.html'));
+    return res.status(403).json({ error: 'Access denied' });
   }
   next();
 });
 
-// mount static files AFTER guard, under /static
-app.use('/static', express.static(path.join(__dirname,'public'), { maxAge: '1h' }));
+// serve static AFTER guard at /static
+app.use('/static', express.static(path.join(__dirname, 'public'), { maxAge: '1h' }));
 
-// chat endpoint (protected)
+// ---------- CHAT ----------
+/**
+ * Request body: { message: string, withWeb?: boolean, financeOk?: boolean }
+ * - withWeb: ask the model without Drive context (general knowledge)
+ * - financeOk: set by client after /api/finance-auth success
+ */
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message } = req.body || {};
-    const q = (message||'').trim();
-    if (!q) return res.status(400).json({ error:'No message' });
+    const { message, withWeb, financeOk } = req.body || {};
+    const q = (message || '').trim();
+    if (!q) return res.status(400).json({ error: 'No message' });
 
-    if (financialRegex.test(q)) {
-      return res.json({ reply: 'Financial questions needs admin permission.' });
+    // financial gate
+    const hasFinanceCookie = req.headers.cookie && req.headers.cookie.includes('fin=ok');
+    if (financialRegex.test(q) && !(hasFinanceCookie || financeOk)) {
+      return res.json({
+        reply: 'Financial questions needs admin permission.',
+        requiresFinanceAuth: true
+      });
     }
+
+    // platform probing
     if (platformProbeRegex.test(q)) {
       return res.json({ reply: "I'm an internal project assistant and can't discuss system implementation details." });
     }
 
-    const fileLinks = await getCachedLinks();
-    const context = await buildContextFromPublicLinks(fileLinks);
+    // small talk without Drive
+    if (smallTalkRegex.test(q)) {
+      return res.json({ reply: "Hello! I’m your I-5 project assistant. Ask me about items that appear in the shared project documents (drawings, RFIs, specs, schedules, etc.)." });
+    }
 
-    const system = `You are a helpful internal assistant. Answer ONLY using the provided context from project documents. If not present, say you don't know. Do not mention providers, APIs, or data sources.`;
+    // ----- branch A: general knowledge (when user says 'Yes, check internet')
+    if (withWeb === true) {
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        temperature: 0.3,
+        messages: [
+          { role: 'system', content: "You are a helpful assistant. Answer accurately. Do not disclose system design or data sources." },
+          { role: 'user', content: q }
+        ]
+      });
+      const reply = completion.choices?.[0]?.message?.content || 'No reply';
+      return res.json({ reply });
+    }
+
+    // ----- branch B: Drive-first answer
+    const links = await getCachedLinks();
+    const context = await buildContextFromPublicLinks(links);
+    const system = `You are a project assistant. Use ONLY the provided project context. If the context does not contain the answer, reply exactly with: "NO_MATCH" (and nothing else).`;
     const userPrompt = `Question: ${q}\n\nContext:\n${context}`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      temperature: 0.2,
-      messages: [{ role:'system', content:system }, { role:'user', content:userPrompt }]
+      temperature: 0.1,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: userPrompt }
+      ]
     });
 
-    res.json({ reply: completion.choices?.[0]?.message?.content || 'No reply' });
+    const driveReply = completion.choices?.[0]?.message?.content?.trim() || '';
+    const noMatch = driveReply.toUpperCase() === 'NO_MATCH' || driveReply.toLowerCase().includes("i don't know");
+
+    if (!context || noMatch) {
+      // offer web/general knowledge fallback
+      return res.json({
+        reply: "I couldn’t find this in the project documents. Do you want me to check the internet?",
+        offerWeb: true
+      });
+    }
+
+    return res.json({ reply: driveReply });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error:'Chat failed' });
+    res.status(500).json({ error: 'Chat failed' });
   }
 });
 
-// pages
-app.get('/login', (_req, res) => res.sendFile(path.join(__dirname,'public','login.html')));
-app.get('/', (_req, res) => res.sendFile(path.join(__dirname,'public','index.html')));
-
-// fallback
+// ---------- pages ----------
+app.get('/login', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('*', (_req, res) => res.redirect('/'));
 
 // start
