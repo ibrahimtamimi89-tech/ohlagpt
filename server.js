@@ -24,12 +24,11 @@ const FIXED_FOLDER_URL =
 // Site password (gate to view the site)
 const APP_PASSWORD = 'tamimi202';
 
-// Admin password for finance questions (use the same for now)
+// Admin password for finance questions
 const FINANCE_PASSWORD = 'tamimi202';
-
 // ===========================================
 
-// ---------- tiny fetch helpers ----------
+// ---------- helpers ----------
 function httpsGet(url) {
   return new Promise((resolve, reject) => {
     https.get(url, (res) => {
@@ -38,7 +37,7 @@ function httpsGet(url) {
       res.on('end', () => {
         const buf = Buffer.concat(chunks);
         if (res.statusCode >= 200 && res.statusCode < 300) resolve({ body: buf });
-        else reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+        else reject(new Error(`HTTP ${res.statusCode}`));
       });
     }).on('error', reject);
   });
@@ -58,10 +57,9 @@ async function expandPublicFolderToLinks(folderUrl) {
     ];
     for (const rx of rxes) { let m; while ((m = rx.exec(html))) ids.add(m[1]); }
     return [...ids].map(id => `https://drive.google.com/file/d/${id}/view`);
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 }
+
 function extractDriveId(s) {
   const rxes = [
     /\/d\/([a-zA-Z0-9_-]{10,})/,
@@ -69,9 +67,10 @@ function extractDriveId(s) {
     /file\/d\/([a-zA-Z0-9_-]{10,})/,
     /^([a-zA-Z0-9_-]{15,})$/
   ];
-  for (const rx of rxes) { const m = (s || '').match(rx); if (m) return m[1]; }
+  for (const rx of rxes) { const m = (s||'').match(rx); if (m) return m[1]; }
   return null;
 }
+
 async function exportPublicDocTxt(id) {
   const r = await httpsGet(`https://docs.google.com/document/d/${id}/export?format=txt`);
   return r.body.toString('utf8');
@@ -92,12 +91,16 @@ async function buildContextFromPublicLinks(links = []) {
     if (!id) continue;
     let handled = false;
 
-    try { const t = await exportPublicDocTxt(id);
-      if (t?.trim()) { out.push(`\n===== DOC ${id} =====\n${t}`); handled = true; } } catch {}
+    try {
+      const t = await exportPublicDocTxt(id);
+      if (t?.trim()) { out.push(`\n===== DOC ${id} =====\n${t}`); handled = true; }
+    } catch {}
     if (handled) continue;
 
-    try { const t = await exportPublicSheetCsv(id);
-      if (t?.trim()) { out.push(`\n===== SHEET ${id} =====\n${t}`); handled = true; } } catch {}
+    try {
+      const t = await exportPublicSheetCsv(id);
+      if (t?.trim()) { out.push(`\n===== SHEET ${id} =====\n${t}`); handled = true; }
+    } catch {}
     if (handled) continue;
 
     try {
@@ -115,7 +118,7 @@ async function buildContextFromPublicLinks(links = []) {
   return out.join('\n').slice(0, 180000);
 }
 
-// Cache the folder listing for 6h
+// cache
 let cachedLinks = []; let lastRefresh = 0;
 async function getCachedLinks() {
   const now = Date.now();
@@ -131,56 +134,37 @@ async function getCachedLinks() {
 // ---------- policies ----------
 const financialRegex = new RegExp(
   [
-    'financial','finance','cost','costs','price','prices','pricing','budget','budgets','estimate','estimation',
-    'invoice','invoices','payment','payments','fee','fees','quote','quotes','bid','bids','bidding',
-    'markup','mark-up','contingency','allowance','capex','opex','unit price','labor rate','material cost',
-    '\\$\\s*\\d','usd','dollar','dollars','change order','co','pay app','pay application'
+    'financial','finance','cost','price','budget','estimate','invoice','payment','fee','quote','bid',
+    'markup','allowance','capex','opex','unit price','labor rate','material cost',
+    '\\$\\s*\\d','usd','dollar','change order','pay app','pay application'
   ].join('|'),'i'
 );
-const platformProbeRegex = /(openai|api key|api provider|gpt|model name|who hosts you|are you connected|google drive|drive link|data source)/i;
-const smallTalkRegex = /(hello|hi|hey|good (morning|afternoon|evening)|help\b|test\b)$/i;
+const platformProbeRegex = /(openai|api key|api provider|gpt|model|google drive|data source)/i;
+const smallTalkRegex = /(hello|hi|hey|good (morning|afternoon|evening)|help|test)$/i;
 
-// ---------- password endpoints ----------
+// ---------- auth endpoints ----------
 app.post('/api/login', (req, res) => {
-  try {
-    const { password } = req.body || {};
-    if (password && password === APP_PASSWORD) {
-      res.cookie('auth', 'ok', {
-        httpOnly: true, sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 24*60*60*1000
-      });
-      return res.json({ ok: true });
-    }
-    res.status(401).json({ error: 'Invalid password' });
-  } catch {
-    res.status(500).json({ error: 'Login failed' });
+  const { password } = req.body || {};
+  if (password === APP_PASSWORD) {
+    res.cookie('auth', 'ok', { httpOnly: true, sameSite: 'lax', secure: true, maxAge: 24*60*60*1000 });
+    return res.json({ ok: true });
   }
+  res.status(401).json({ error: 'Invalid password' });
 });
 
-// finance auth cookie (short lived)
 app.post('/api/finance-auth', (req, res) => {
-  try {
-    const { password } = req.body || {};
-    if (password && password === FINANCE_PASSWORD) {
-      res.cookie('fin', 'ok', {
-        httpOnly: true, sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 15*60*1000 // 15 minutes
-      });
-      return res.json({ ok: true });
-    }
-    res.status(401).json({ error: 'Invalid finance password' });
-  } catch {
-    res.status(500).json({ error: 'Finance auth failed' });
+  const { password } = req.body || {};
+  if (password === FINANCE_PASSWORD) {
+    res.cookie('fin', 'ok', { httpOnly: true, sameSite: 'lax', secure: true, maxAge: 15*60*1000 });
+    return res.json({ ok: true });
   }
+  res.status(401).json({ error: 'Invalid finance password' });
 });
 
-// ---------- auth guard (before static) ----------
+// ---------- guard ----------
 app.use((req, res, next) => {
   if (req.method === 'POST' && (req.path === '/api/login' || req.path === '/api/finance-auth')) return next();
   if (req.path.startsWith('/static/') || req.path === '/favicon.ico' || req.path === '/login') return next();
-
   const authed = req.headers.cookie && req.headers.cookie.includes('auth=ok');
   if (!authed) {
     if (req.method === 'GET') return res.sendFile(path.join(__dirname, 'public', 'login.html'));
@@ -189,81 +173,50 @@ app.use((req, res, next) => {
   next();
 });
 
-// serve static AFTER guard at /static
 app.use('/static', express.static(path.join(__dirname, 'public'), { maxAge: '1h' }));
 
 // ---------- CHAT ----------
-/**
- * Request body: { message: string, withWeb?: boolean, financeOk?: boolean }
- * - withWeb: ask the model without Drive context (general knowledge)
- * - financeOk: set by client after /api/finance-auth success
- */
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, withWeb, financeOk } = req.body || {};
     const q = (message || '').trim();
     if (!q) return res.status(400).json({ error: 'No message' });
 
-    // financial gate
     const hasFinanceCookie = req.headers.cookie && req.headers.cookie.includes('fin=ok');
     if (financialRegex.test(q) && !(hasFinanceCookie || financeOk)) {
-      return res.json({
-        reply: 'Financial questions needs admin permission.',
-        requiresFinanceAuth: true
+      return res.json({ reply: 'Financial questions needs admin permission.', requiresFinanceAuth: true });
+    }
+
+    if (platformProbeRegex.test(q))
+      return res.json({ reply: "I'm an internal project assistant and can't discuss system design." });
+
+    if (smallTalkRegex.test(q))
+      return res.json({ reply: "Hello! I’m your I-5 project assistant. Ask me about topics in the shared project documents." });
+
+    if (withWeb) {
+      const g = await openai.chat.completions.create({
+        model: 'gpt-4o-mini', temperature: 0.3,
+        messages: [{ role: 'system', content: 'Answer accurately, without revealing internal systems.' },
+                   { role: 'user', content: q }]
       });
+      return res.json({ reply: g.choices?.[0]?.message?.content || 'No reply' });
     }
 
-    // platform probing
-    if (platformProbeRegex.test(q)) {
-      return res.json({ reply: "I'm an internal project assistant and can't discuss system implementation details." });
-    }
-
-    // small talk without Drive
-    if (smallTalkRegex.test(q)) {
-      return res.json({ reply: "Hello! I’m your I-5 project assistant. Ask me about items that appear in the shared project documents (drawings, RFIs, specs, schedules, etc.)." });
-    }
-
-    // ----- branch A: general knowledge (when user says 'Yes, check internet')
-    if (withWeb === true) {
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        temperature: 0.3,
-        messages: [
-          { role: 'system', content: "You are a helpful assistant. Answer accurately. Do not disclose system design or data sources." },
-          { role: 'user', content: q }
-        ]
-      });
-      const reply = completion.choices?.[0]?.message?.content || 'No reply';
-      return res.json({ reply });
-    }
-
-    // ----- branch B: Drive-first answer
     const links = await getCachedLinks();
     const context = await buildContextFromPublicLinks(links);
-    const system = `You are a project assistant. Use ONLY the provided project context. If the context does not contain the answer, reply exactly with: "NO_MATCH" (and nothing else).`;
+    const system = "You are a project assistant. Use ONLY the provided project context. If context doesn't contain answer, reply exactly 'NO_MATCH'.";
     const userPrompt = `Question: ${q}\n\nContext:\n${context}`;
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      temperature: 0.1,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: userPrompt }
-      ]
+    const ans = await openai.chat.completions.create({
+      model: 'gpt-4o-mini', temperature: 0.1,
+      messages: [{ role: 'system', content: system }, { role: 'user', content: userPrompt }]
     });
 
-    const driveReply = completion.choices?.[0]?.message?.content?.trim() || '';
-    const noMatch = driveReply.toUpperCase() === 'NO_MATCH' || driveReply.toLowerCase().includes("i don't know");
+    const driveReply = ans.choices?.[0]?.message?.content?.trim() || '';
+    if (!context || driveReply.toUpperCase() === 'NO_MATCH' || driveReply.toLowerCase().includes("i don't know"))
+      return res.json({ reply: "I couldn’t find this in the project documents. Do you want me to check the internet?", offerWeb: true });
 
-    if (!context || noMatch) {
-      // offer web/general knowledge fallback
-      return res.json({
-        reply: "I couldn’t find this in the project documents. Do you want me to check the internet?",
-        offerWeb: true
-      });
-    }
-
-    return res.json({ reply: driveReply });
+    res.json({ reply: driveReply });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Chat failed' });
@@ -275,6 +228,6 @@ app.get('/login', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'lo
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('*', (_req, res) => res.redirect('/'));
 
-// start
+// ---------- start ----------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ OHLA GPT running on :${PORT}`));

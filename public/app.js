@@ -30,14 +30,10 @@ function addOfferButtons() {
   no.className = 'btn';
   no.style.background = '#6b7280';
 
-  yes.onclick = () => {
-    wrap.remove();
-    ask(lastQuestion, { withWeb: true });
-  };
+  yes.onclick = () => { wrap.remove(); ask(lastQuestion, { withWeb: true }); };
   no.onclick = () => wrap.remove();
 
-  wrap.appendChild(yes);
-  wrap.appendChild(no);
+  wrap.appendChild(yes); wrap.appendChild(no);
   messagesEl.appendChild(wrap);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
@@ -50,10 +46,7 @@ async function promptFinancePassword() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password: pw })
   });
-  if (!res.ok) {
-    addMsg('Admin permission failed (invalid password).', false);
-    return null;
-  }
+  if (!res.ok) { addMsg('Admin permission failed (invalid password).'); return null; }
   return true;
 }
 
@@ -74,7 +67,6 @@ async function ask(message, opts = {}) {
     if (data.requiresFinanceAuth) {
       const ok = await promptFinancePassword();
       if (ok) {
-        // resend same question with financeOk flag
         const info = addMsg('Admin permission granted. Retrying…');
         const res2 = await fetch('/api/chat', {
           method: 'POST',
@@ -98,6 +90,7 @@ sendBtn.addEventListener('click', () => {
   questionEl.value = '';
   ask(q);
 });
+
 questionEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
@@ -114,10 +107,8 @@ function updateClock() {
   const pad = (n) => String(n).padStart(2, '0');
   const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
   const dateStr = now.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
-  const t = document.getElementById('clockTime');
-  const d = document.getElementById('clockDate');
-  if (t) t.textContent = timeStr;
-  if (d) d.textContent = dateStr;
+  $('#clockTime').textContent = timeStr;
+  $('#clockDate').textContent = dateStr;
 }
 updateClock();
 setInterval(updateClock, 1000);
