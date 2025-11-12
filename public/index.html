@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OHLA GPT</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f6fa; margin: 0; padding: 0; }
+    header { background: #1e293b; color: white; padding: 12px 20px; font-size: 20px; }
+    .chat-container { max-width: 800px; margin: 40px auto; background: white; border-radius: 10px; box-shadow: 0 0 8px rgba(0,0,0,0.1); padding: 20px; }
+    .messages { height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; padding: 10px; background: #fafafa; margin-bottom: 10px; }
+    .msg { padding: 10px; border-radius: 6px; margin: 6px 0; }
+    .msg.user { background: #e0f7ff; }
+    .msg.bot { background: #eef0f3; }
+    .input-area { display: flex; gap: 10px; }
+    input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 16px; }
+    button { background: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <header>OHLA GPT</header>
+  <div class="chat-container">
+    <div class="messages" id="messages"></div>
+    <div class="input-area">
+      <input type="text" id="question" placeholder="Ask a question..." />
+      <button id="sendBtn">Send</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

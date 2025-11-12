@@ -1,0 +1,18 @@
+{
+  "name": "drive-chat-openai-starter",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "NODE_ENV=development node server.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-session": "^1.17.3",
+    "googleapis": "^134.0.0",
+    "openai": "^4.58.1",
+    "pdf-parse": "^1.1.1"
+  }
+}
