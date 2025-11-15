@@ -2,59 +2,260 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <title>OHLA GPT — I-5 Project Assistant</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OHLA GPT</title>
   <style>
-    body { font-family: system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; margin:0; background:#f6f7f9; }
-    header { background:#0b2545; color:#fff; padding:14px 22px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 2px 6px rgba(0,0,0,.1); }
-    header .brand { display:flex; align-items:center; gap:10px; font-weight:600; font-size:20px; }
-    header img { height:40px; border-radius:8px; }
-    .container { max-width:1100px; margin:24px auto; padding:0 16px; display:grid; grid-template-columns:1fr 260px; gap:18px; }
-    .card { background:#fff; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,.06); padding:18px; position:relative; }
-    .chat { height:560px; display:flex; flex-direction:column; overflow:hidden; }
-    .chat::before { content:""; position:absolute; inset:0; background:url('/static/logo.png') center/60% no-repeat; opacity:.6; pointer-events:none; }
-    .messages { flex:1; overflow:auto; padding:8px; position:relative; z-index:1; }
-    .msg { background:#f9fafb; border-radius:12px; padding:10px 12px; margin:6px 0; }
-    .msg.me { background:#e0f2fe; }
-    .composer { display:flex; gap:8px; position:relative; z-index:1; }
-    input { width:100%; padding:10px; border:1px solid #e5e7eb; border-radius:10px; font-size:15px; }
-    .btn { padding:10px 14px; border:0; border-radius:10px; background:#2563eb; color:#fff; cursor:pointer; }
-    .btn:hover { background:#1d4ed8; }
-    .side { display:flex; flex-direction:column; gap:12px; justify-content:space-between; }
-    .clock { background:#111827; color:#d1d5db; border-radius:12px; padding:16px; text-align:center; font-variant-numeric:tabular-nums; }
-    .clock .time { font-size:28px; font-weight:600; color:#fff; }
-    .clock .date { font-size:14px; opacity:.9; margin-top:4px; }
-    .credit { text-align:center; font-size:16px; line-height:1.4; color:#374151; margin-top:12px; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+    }
+    header {
+      background: #020617;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand img {
+      height: 26px;
+    }
+    .brand-title {
+      font-weight: 600;
+      font-size: 17px;
+      color: #f9fafb;
+    }
+    .brand-sub {
+      font-size: 13px;
+      color: #9ca3af;
+    }
+
+    .clock-card {
+      background: #020617;
+      padding: 10px 16px;
+      border-radius: 999px;
+      font-size: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .clock-time {
+      font-weight: 600;
+    }
+
+    main {
+      padding: 18px;
+      display: flex;
+      justify-content: center;
+    }
+    .layout {
+      width: 100%;
+      max-width: 1150px;
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(240px, 1fr);
+      gap: 20px;
+    }
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .chat-card {
+      position: relative;
+      background: radial-gradient(circle at top left, #0b1220, #020617);
+      border-radius: 18px;
+      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.7);
+      padding: 16px 16px 14px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      overflow: hidden;
+    }
+    .watermark {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      opacity: 0.18;
+    }
+    .watermark img {
+      max-width: 75%;
+      max-height: 75%;
+      object-fit: contain;
+    }
+    .chat-content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      height: 540px;
+    }
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 2px 8px;
+    }
+    .msg-row {
+      margin-bottom: 8px;
+      display: flex;
+    }
+    .msg-row.me { justify-content: flex-end; }
+    .bubble {
+      max-width: 80%;
+      padding: 8px 11px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.4;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+    }
+    .msg-row.me .bubble {
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+      color: #e5e7eb;
+    }
+
+    .composer {
+      display: flex;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    #question {
+      flex: 1;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      padding: 10px 14px;
+      font-size: 14px;
+      outline: none;
+      background: rgba(15, 23, 42, 0.95);
+      color: #e5e7eb;
+    }
+    #question::placeholder {
+      color: #64748b;
+    }
+    #sendBtn {
+      border-radius: 999px;
+      border: none;
+      padding: 9px 16px;
+      font-size: 14px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+      min-width: 70px;
+    }
+    #sendBtn:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    .credits {
+      margin-top: 6px;
+      font-size: 13px;
+      color: #9ca3af;
+      text-align: right;
+    }
+
+    .side-card {
+      background: #020617;
+      border-radius: 18px;
+      padding: 16px 18px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+      height: fit-content;
+    }
+    .side-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #f9fafb;
+    }
+    .side-text {
+      font-size: 13px;
+      color: #9ca3af;
+      line-height: 1.5;
+    }
+
+    .btn-inline {
+      margin-top: 6px;
+      display: inline-flex;
+      gap: 6px;
+    }
+    .btn-small {
+      border-radius: 999px;
+      border: none;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn-yes {
+      background: #16a34a;
+      color: #ecfdf5;
+    }
+    .btn-no {
+      background: #4b5563;
+      color: #e5e7eb;
+    }
   </style>
 </head>
 <body>
   <header>
     <div class="brand">
-      <img src="/static/logo.png" alt="OHLA GPT Logo"/>
-      <span>OHLA GPT — I-5 Project Assistant</span>
+      <img src="/static/logo.png" alt="OHLA Logo" />
+      <div>
+        <div class="brand-title">OHLA GPT — I-5 Project Assistant</div>
+        <div class="brand-sub">Santa Clarita I-5 North County Enhancement Project</div>
+      </div>
+    </div>
+    <div class="clock-card">
+      <span>Local time:</span>
+      <span id="clock" class="clock-time">--:--:--</span>
     </div>
   </header>
 
-  <div class="container">
-    <div class="card chat">
-      <div class="messages" id="messages"></div>
-      <div class="composer">
-        <input id="question" placeholder="Ask about the I-5 project files..." autocomplete="off" />
-        <button class="btn" id="sendBtn">Send</button>
+  <main>
+    <div class="layout">
+      <div class="chat-card">
+        <div class="watermark">
+          <img src="/static/logo.png" alt="OHLA Watermark" />
+        </div>
+        <div class="chat-content">
+          <div id="messages" class="messages"></div>
+          <div class="composer">
+            <input
+              id="question"
+              placeholder="Ask about the I-5 project files, RFIs, PCOs, permits, specs, or submittals..."
+            />
+            <button id="sendBtn">Send</button>
+          </div>
+          <div class="credits">
+            <div>Designed by: <strong>Ibrahim Altamimi</strong></div>
+            <div>OHLA USA, Inc., I-5 Project – California</div>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <div class="side">
-      <div class="card clock">
-        <div class="time" id="clockTime">--:--:--</div>
-        <div class="date" id="clockDate">----</div>
-      </div>
-      <div class="credit card">
-        <div>Designed by: <b>Ibrahim Altamimi</b></div>
-        <div>OHLA USA, Inc., I-5 Project – California</div>
-      </div>
+      <aside class="side-card">
+        <div class="side-title">How this assistant works</div>
+        <div class="side-text">
+          • Uses OHLA I-5 project documents (permits, RFIs, PCOs, contracts, submittals, specs).<br />
+          • If something is not clearly in the files, you can optionally let it check general knowledge.<br />
+          • Financial and cost-related questions require admin permission.
+        </div>
+      </aside>
     </div>
-  </div>
+  </main>
 
   <script type="module" src="/static/app.js"></script>
 </body>
