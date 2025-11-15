@@ -1,360 +1,345 @@
-import 'dotenv/config';
-import express from 'express';
-import session from 'express-session';
-import cookieParser from 'cookie-parser';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import OpenAI from 'openai';
-import pdfParse from 'pdf-parse';
-import XLSX from 'xlsx';
-import mammoth from 'mammoth';
+// server.js
+// OHLA GPT — I-5 Project Assistant (S3 hybrid search + OpenAI)
 
-// AWS SDK v3
-import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
-import { TextractClient, DetectDocumentTextCommand } from '@aws-sdk/client-textract';
+require("dotenv").config();
 
-// ---------------------------------------------------------------------
-// Basic app setup
-// ---------------------------------------------------------------------
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const path = require("path");
+const express = require("express");
+const session = require("express-session");
+const fetch = require("node-fetch");
+const AWS = require("aws-sdk");
+const XLSX = require("xlsx");
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));
-app.use(cookieParser());
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || 'dev-secret',
-    resave: false,
-    saveUninitialized: false,
-    cookie: { httpOnly: true }
-  })
-);
 
-app.use(express.static(path.join(__dirname, 'public')));
+// ---------- CONFIG ----------
 
-// ---------------------------------------------------------------------
-// OpenAI client
-// ---------------------------------------------------------------------
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// IMPORTANT: these MUST exist in Render Environment tab
+const {
+  OPENAI_API_KEY,
+  AWS_ACCESS_KEY_ID,
+  AWS_SECRET_ACCESS_KEY,
+  AWS_REGION,
+  S3_BUCKET,
+  S3_PREFIX,
+  FINANCE_PASSWORD,
+  SESSION_SECRET,
+  PORT
+} = process.env;
 
-// ---------------------------------------------------------------------
-// AWS clients (S3 + Textract)
-// ---------------------------------------------------------------------
-const awsRegion = process.env.AWS_REGION || 'us-east-1';
-const s3Bucket = process.env.S3_BUCKET;      // e.g. "ohla-gpt-project-files"
-const s3Prefix = (process.env.S3_PREFIX || '').replace(/^\/+/, '').replace(/\/+$/, '') + '/'; // "GPT Files/"
+// Basic sanity logs (no secrets)
+console.log("=== OHLA GPT STARTUP ===");
+console.log("AWS_REGION:", AWS_REGION);
+console.log("S3_BUCKET:", S3_BUCKET);
+console.log("S3_PREFIX:", S3_PREFIX);
+console.log("FINANCE_PASSWORD set:", !!FINANCE_PASSWORD);
+console.log("========================");
 
-if (!s3Bucket) {
-  console.warn('⚠ S3_BUCKET is not set. S3 search will be disabled.');
+if (!OPENAI_API_KEY) {
+  console.error("OPENAI_API_KEY is missing");
+}
+if (!S3_BUCKET) {
+  console.warn("S3_BUCKET is not set. S3 search will be DISABLED.");
 }
 
-const commonAwsConfig = {
-  region: awsRegion,
-  credentials: process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
-    ? {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-      }
-    : undefined
-};
-
-const s3 = new S3Client(commonAwsConfig);
-const textract = new TextractClient(commonAwsConfig);
-
-// ---------------------------------------------------------------------
-// Helpers: S3 listing + streaming
-// ---------------------------------------------------------------------
-async function streamToBuffer(stream) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    stream.on('data', (c) => chunks.push(c));
-    stream.on('error', reject);
-    stream.on('end', () => resolve(Buffer.concat(chunks)));
+// Configure AWS SDK
+if (AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY && AWS_REGION) {
+  AWS.config.update({
+    accessKeyId: AWS_ACCESS_KEY_ID,
+    secretAccessKey: AWS_SECRET_ACCESS_KEY,
+    region: AWS_REGION
   });
 }
 
-function getExt(key) {
-  const m = key.toLowerCase().match(/\.([a-z0-9]+)$/);
-  return m ? m[1] : '';
+const s3 = new AWS.S3();
+
+// ---------- EXPRESS MIDDLEWARE ----------
+
+app.use(express.json({ limit: "10mb" }));
+app.use(
+  session({
+    secret: SESSION_SECRET || "ohlagpt_default_secret",
+    resave: false,
+    saveUninitialized: true
+  })
+);
+
+// Serve static files (front-end)
+app.use(express.static(path.join(__dirname, "public")));
+
+// ---------- HELPERS ----------
+
+function isFinancialQuestion(text) {
+  if (!text) return false;
+  const t = text.toLowerCase();
+
+  const keywords = [
+    "cost",
+    "costs",
+    "price",
+    "prices",
+    "budget",
+    "estimate",
+    "amount",
+    "dollars",
+    "dollar",
+    "$",
+    "pay item",
+    "pay items",
+    "change order",
+    "pco",
+    "rco",
+    "invoice",
+    "payment",
+    "extra work bill",
+    "ewb",
+    "unit price",
+    "lump sum"
+  ];
+
+  return keywords.some((word) => t.includes(word));
 }
 
-let s3Index = [];            // { key, name, ext }
-let lastIndexRefresh = 0;
-const INDEX_TTL_MS = 5 * 60 * 1000; // refresh every 5 minutes
+// Read a stream (S3 object) into a string Buffer
+function streamToBuffer(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on("data", (chunk) => chunks.push(chunk));
+    stream.on("error", reject);
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+  });
+}
 
-async function refreshS3Index() {
-  if (!s3Bucket) return;
+// Extract text from common file types
+async function extractTextFromS3Object(obj) {
+  const key = obj.Key || "";
+  const lower = key.toLowerCase();
 
-  const now = Date.now();
-  if (now - lastIndexRefresh < INDEX_TTL_MS && s3Index.length) return;
+  // Only process "light" file types for now
+  const allowed =
+    lower.endsWith(".txt") ||
+    lower.endsWith(".md") ||
+    lower.endsWith(".csv") ||
+    lower.endsWith(".json") ||
+    lower.endsWith(".xls") ||
+    lower.endsWith(".xlsx");
 
-  const listParams = {
-    Bucket: s3Bucket,
-    Prefix: s3Prefix === '/' ? undefined : s3Prefix
+  if (!allowed) {
+    return null;
+  }
+
+  const params = {
+    Bucket: S3_BUCKET,
+    Key: key
   };
 
-  const objects = [];
-  let token;
-  do {
-    const resp = await s3.send(
-      new ListObjectsV2Command({
-        ...listParams,
-        ContinuationToken: token
-      })
-    );
-    (resp.Contents || []).forEach((obj) => {
-      if (!obj.Key.endsWith('/')) objects.push(obj.Key);
-    });
-    token = resp.IsTruncated ? resp.NextContinuationToken : undefined;
-  } while (token);
+  const data = await s3.getObject(params).promise();
+  const body = data.Body;
 
-  s3Index = objects.map((key) => ({
-    key,
-    name: key.split('/').slice(-1)[0],
-    ext: getExt(key)
-  }));
+  // Text-like files
+  if (
+    lower.endsWith(".txt") ||
+    lower.endsWith(".md") ||
+    lower.endsWith(".csv") ||
+    lower.endsWith(".json")
+  ) {
+    return {
+      key,
+      text: body.toString("utf8")
+    };
+  }
 
-  lastIndexRefresh = now;
-  console.log(`Indexed ${s3Index.length} S3 objects under ${s3Bucket}/${s3Prefix}`);
+  // Excel files (RFI log, permit logs, etc.)
+  if (lower.endsWith(".xls") || lower.endsWith(".xlsx")) {
+    try {
+      const buf = Buffer.isBuffer(body) ? body : Buffer.from(body);
+      const wb = XLSX.read(buf, { type: "buffer" });
+      let text = "";
+      wb.SheetNames.forEach((sheetName) => {
+        const ws = wb.Sheets[sheetName];
+        const csv = XLSX.utils.sheet_to_csv(ws);
+        text += `\n\n[Sheet: ${sheetName}]\n${csv}`;
+      });
+      return { key, text };
+    } catch (err) {
+      console.error("Error reading Excel file:", key, err.message);
+      return null;
+    }
+  }
+
+  return null;
 }
 
-// ---------------------------------------------------------------------
-// Helpers: text extraction per file type
-// ---------------------------------------------------------------------
-const textCache = new Map(); // key -> text
+// Search S3 for relevant context
+async function searchS3ForContext(query) {
+  if (!S3_BUCKET) {
+    return "";
+  }
 
-async function getObjectBuffer(key) {
-  const resp = await s3.send(
-    new GetObjectCommand({
-      Bucket: s3Bucket,
-      Key: key
+  console.log("Searching S3 for:", query);
+
+  const params = {
+    Bucket: S3_BUCKET,
+    Prefix: S3_PREFIX || "",
+    MaxKeys: 40
+  };
+
+  let continuationToken = undefined;
+  let matchedDocs = [];
+  const queryLower = (query || "").toLowerCase();
+
+  try {
+    do {
+      const resp = await s3
+        .listObjectsV2({ ...params, ContinuationToken: continuationToken })
+        .promise();
+
+      const objs = resp.Contents || [];
+
+      for (const obj of objs) {
+        if (matchedDocs.length >= 10) break;
+
+        const extracted = await extractTextFromS3Object(obj);
+        if (!extracted) continue;
+
+        const textLower = extracted.text.toLowerCase();
+
+        if (textLower.includes(queryLower)) {
+          console.log("Matched S3 object:", extracted.key);
+          matchedDocs.push(
+            `From file: ${extracted.key}\n\n${extracted.text.substring(
+              0,
+              4000
+            )}`
+          );
+        }
+      }
+
+      continuationToken = resp.IsTruncated ? resp.NextContinuationToken : undefined;
+      if (matchedDocs.length >= 10) break;
+    } while (continuationToken);
+
+    const combined = matchedDocs.join("\n\n---\n\n");
+    console.log("S3 context length:", combined.length);
+    return combined;
+  } catch (err) {
+    console.error("Error searching S3:", err.message);
+    return "";
+  }
+}
+
+// Call OpenAI Chat Completion
+async function callOpenAI(messages) {
+  const url = "https://api.openai.com/v1/chat/completions";
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: "gpt-4.1-mini",
+      messages
     })
-  );
-  return streamToBuffer(resp.Body);
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    console.error("OpenAI error:", res.status, txt);
+    throw new Error("OpenAI API error");
+  }
+
+  const data = await res.json();
+  const choice = data.choices && data.choices[0];
+  return choice && choice.message && choice.message.content
+    ? choice.message.content.trim()
+    : "Sorry, I couldn't generate a response.";
 }
 
-async function extractTextFromS3Object(meta) {
-  if (!s3Bucket) return '';
-  if (textCache.has(meta.key)) return textCache.get(meta.key);
+// ---------- API ROUTES ----------
 
-  const ext = meta.ext;
-  let text = '';
-
+app.post("/api/chat", async (req, res) => {
   try {
-    if (['txt', 'csv', 'log'].includes(ext)) {
-      const buf = await getObjectBuffer(meta.key);
-      text = buf.toString('utf8');
-    } else if (['json'].includes(ext)) {
-      const buf = await getObjectBuffer(meta.key);
-      const obj = JSON.parse(buf.toString('utf8'));
-      text = JSON.stringify(obj, null, 2);
-    } else if (['pdf'].includes(ext)) {
-      const buf = await getObjectBuffer(meta.key);
-      const parsed = await pdfParse(buf);
-      text = parsed.text || '';
-    } else if (['xls', 'xlsx'].includes(ext)) {
-      const buf = await getObjectBuffer(meta.key);
-      const wb = XLSX.read(buf, { type: 'buffer' });
-      const pieces = [];
-      wb.SheetNames.forEach((name) => {
-        const sheet = wb.Sheets[name];
-        const csv = XLSX.utils.sheet_to_csv(sheet);
-        pieces.push(`\n\n=== Sheet: ${name} ===\n${csv}`);
-      });
-      text = pieces.join('\n');
-    } else if (['docx'].includes(ext)) {
-      const buf = await getObjectBuffer(meta.key);
-      const result = await mammoth.extractRawText({ buffer: buf });
-      text = result.value || '';
-    } else if (['jpg', 'jpeg', 'png', 'tif', 'tiff'].includes(ext)) {
-      // Use AWS Textract OCR directly from S3
-      const texResp = await textract.send(
-        new DetectDocumentTextCommand({
-          Document: {
-            S3Object: {
-              Bucket: s3Bucket,
-              Name: meta.key
-            }
-          }
-        })
-      );
-      const blocks = texResp.Blocks || [];
-      text = blocks
-        .filter((b) => b.BlockType === 'LINE')
-        .map((b) => b.Text)
-        .join('\n');
-    } else {
-      // Unsupported type – still try to read as text to be safe
-      const buf = await getObjectBuffer(meta.key);
-      text = buf.toString('utf8');
-    }
-  } catch (err) {
-    console.error(`Error extracting text from ${meta.key}:`, err.message);
-    text = '';
-  }
+    const { message, internetAllowed, financePassword } = req.body || {};
+    const userQuestion = (message || "").trim();
 
-  const trimmed = text.trim();
-  textCache.set(meta.key, trimmed);
-  return trimmed;
-}
-
-// ---------------------------------------------------------------------
-// Simple scoring & context building
-// ---------------------------------------------------------------------
-function tokenize(str) {
-  return (str || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter((t) => t.length > 2);
-}
-
-function scoreDocument(questionTokens, text) {
-  if (!text) return 0;
-  const sample = text.slice(0, 8000).toLowerCase();
-  let score = 0;
-  for (const tok of questionTokens) {
-    if (sample.includes(tok)) score += 1;
-  }
-  return score;
-}
-
-async function buildS3Context(question) {
-  if (!s3Bucket) return { context: '', usedDocs: [] };
-
-  await refreshS3Index();
-
-  const qTokens = tokenize(question);
-  const scored = [];
-
-  for (const meta of s3Index) {
-    const text = await extractTextFromS3Object(meta);
-    if (!text) continue;
-    const score = scoreDocument(qTokens, text);
-    if (score > 0) {
-      scored.push({
-        meta,
-        text,
-        score
-      });
-    }
-  }
-
-  scored.sort((a, b) => b.score - a.score);
-  const top = scored.slice(0, 5);
-
-  const parts = top.map(
-    (d) =>
-      `\n\n===== DOCUMENT: ${d.meta.name} (S3 key: ${d.meta.key}) =====\n${d.text.slice(
-        0,
-        8000
-      )}`
-  );
-
-  return {
-    context: parts.join('\n'),
-    usedDocs: top.map((d) => d.meta.name)
-  };
-}
-
-// ---------------------------------------------------------------------
-// Finance / cost detection
-// ---------------------------------------------------------------------
-const FINANCE_PASSWORD = process.env.FINANCE_PASSWORD || 'tamimi202';
-
-function isFinancialQuestion(msg) {
-  if (!msg) return false;
-  const re =
-    /(cost|budget|price|dollar|usd|\$|estimate|pay\s*item|payment|invoice|change order|extra work|EWB|PCO|CO #)/i;
-  return re.test(msg);
-}
-
-// ---------------------------------------------------------------------
-// API: Chat
-// ---------------------------------------------------------------------
-app.post('/api/chat', async (req, res) => {
-  try {
-    const { message, allowInternet, financePassword } = req.body || {};
-    if (!message || typeof message !== 'string') {
-      return res.status(400).json({ error: 'Missing message' });
+    if (!userQuestion) {
+      return res.json({ reply: "Please enter a question." });
     }
 
-    // Finance protection
-    if (isFinancialQuestion(message) && financePassword !== FINANCE_PASSWORD) {
+    // 1) Financial / cost questions require admin password
+    if (isFinancialQuestion(userQuestion)) {
+      if (!financePassword || financePassword !== FINANCE_PASSWORD) {
+        return res.json({
+          reply: "Financial questions need admin permission.",
+          financialProtected: true
+        });
+      }
+    }
+
+    // 2) First try to answer using project documents (S3)
+    let context = await searchS3ForContext(userQuestion);
+
+    if (!context && !internetAllowed) {
+      // No match in S3, and user has not allowed general knowledge yet
       return res.json({
-        reply: 'Financial questions need admin permission.',
-        needsFinancePassword: true
+        reply:
+          "I couldn't find this in the current I-5 project documents I have. Do you want me to check general knowledge (similar to checking the internet)?",
+        needsInternetPermission: true
       });
     }
 
-    // Build S3 context
-    const { context: s3Context, usedDocs } = await buildS3Context(message);
-    const hasUsefulDocs = s3Context && s3Context.trim().length > 0;
+    const systemPrompt = `
+You are "OHLA GPT" — an assistant for the Santa Clarita I-5 North County Enhancement Project.
+You help with RFIs, permits, PCOs, specs, contracts, submittals, and construction questions.
 
-    const systemParts = [];
-    systemParts.push(
-      'You are the OHLA I-5 project assistant for the Santa Clarita I-5 North County Enhancement Project.'
-    );
-    systemParts.push(
-      'Use the project documents provided in the "Project documents" section as your primary source.'
-    );
-    systemParts.push(
-      'When you can answer from those documents, clearly answer and, when helpful, mention the document names in parentheses, e.g. (from RFI Log.xls).'
-    );
-    systemParts.push(
-      "If the documents don't clearly answer the question, briefly say that you couldn't find it in the current I-5 project documents."
-    );
+If project document context is provided, you MUST rely on it first and quote specific info.
+If something is not covered in the documents AND internetAllowed=true, you may answer using your own general engineering knowledge.
+Do not mention S3, AWS, OpenAI, or how the system is implemented.
 
-    if (allowInternet) {
-      systemParts.push(
-        'In addition, you may use your general engineering and construction knowledge to give a reasonable answer, but still make it clear when something is *not* explicitly in the documents.'
-      );
+If the user asks anything about finances or costs and I have already confirmed an admin password,
+you can answer, but still keep the answer professional and concise.
+    `.trim();
+
+    const messages = [
+      { role: "system", content: systemPrompt }
+    ];
+
+    if (context) {
+      messages.push({
+        role: "system",
+        content:
+          "Here are excerpts from I-5 project documents. Use them as the main reference:\n\n" +
+          context
+      });
     } else {
-      systemParts.push(
-        'Do NOT invent details that are not implied by the documents. If the documents do not answer, say so; the UI will ask the user if they want you to check general knowledge (similar to checking the internet).'
-      );
+      messages.push({
+        role: "system",
+        content:
+          "No project document context is available. Answer using only general knowledge."
+      });
     }
 
-    systemParts.push(
-      'Never mention OpenAI, APIs, AWS, S3, Textract, or any implementation details. Just behave like a helpful internal project assistant.'
-    );
-
-    const systemMessage = systemParts.join(' ');
-
-    const userContent = `User question:\n${message}\n\nProject documents (from AWS S3):\n${s3Context ||
-      '[No matching documents were found or could be read.]'}`;
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      temperature: 0.2,
-      messages: [
-        { role: 'system', content: systemMessage },
-        { role: 'user', content: userContent }
-      ]
+    messages.push({
+      role: "user",
+      content: userQuestion
     });
 
-    const reply = completion.choices?.[0]?.message?.content || 'No reply';
+    const reply = await callOpenAI(messages);
 
-    res.json({
-      reply,
-      usedDocs,
-      usedInternet: !!allowInternet && !hasUsefulDocs
-    });
+    return res.json({ reply });
   } catch (err) {
-    console.error('Chat failed:', err);
-    res.status(500).json({ error: 'Chat failed' });
+    console.error("Chat error:", err);
+    return res.status(500).json({
+      reply: "Sorry, something went wrong on the server."
+    });
   }
 });
 
-// ---------------------------------------------------------------------
-// Serve frontend
-// ---------------------------------------------------------------------
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+// ---------- START SERVER ----------
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+const port = PORT || 10000;
+app.listen(port, () => {
+  console.log(`OHLA GPT (S3 hybrid) running on port ${port}`);
 });

@@ -1,21 +1,17 @@
 {
-  "name": "drive-chat-openai-starter",
+  "name": "ohlagpt",
   "version": "1.0.0",
-  "type": "module",
+  "description": "OHLA GPT — I-5 Project Assistant (S3 hybrid)",
+  "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "NODE_ENV=development node server.js"
+    "start": "node server.js"
   },
   "dependencies": {
-    "cookie-parser": "^1.4.6",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
+    "aws-sdk": "^2.1575.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.18.2",
     "express-session": "^1.17.3",
-    "openai": "^4.58.1",
-    "pdf-parse": "^1.1.1",
-    "@aws-sdk/client-s3": "^3.667.0",
-    "@aws-sdk/client-textract": "^3.667.0",
-    "xlsx": "^0.18.5",
-    "mammoth": "^1.6.0"
+    "node-fetch": "^2.7.0",
+    "xlsx": "^0.18.5"
   }
 }
