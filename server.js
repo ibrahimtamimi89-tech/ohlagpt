@@ -12,11 +12,14 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 // ===== OpenAI client =====
+if (!process.env.OPENAI_API_KEY) {
+  console.error("ERROR: OPENAI_API_KEY is not set.");
+}
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// ===== AWS SDK (S3 + Textract) =====
+// ===== AWS SDK (S3 + future Textract) =====
 const AWS_REGION = process.env.AWS_REGION || "us-east-2";
 const S3_BUCKET = process.env.S3_BUCKET;
 const S3_PREFIX = process.env.S3_PREFIX || "";
@@ -24,7 +27,7 @@ const S3_PREFIX = process.env.S3_PREFIX || "";
 AWS.config.update({ region: AWS_REGION });
 
 const s3 = new AWS.S3();
-const textract = new AWS.Textract();
+// const textract = new AWS.Textract(); // reserved for future OCR
 
 // ===== In-memory index of project files =====
 let s3IndexSummary = "";
@@ -53,9 +56,15 @@ async function loadS3Index() {
 
       const json = JSON.parse(indexObj.Body.toString("utf-8"));
       s3IndexJson = json;
-      console.log("Loaded custom index.json from S3 with", json.length, "entries");
+      console.log(
+        "Loaded custom index.json from S3 with",
+        json.length,
+        "entries"
+      );
     } catch (err) {
-      console.log("No index.json found or failed to parse – proceeding with object list only.");
+      console.log(
+        "No index.json found or failed to parse – proceeding with object list only."
+      );
     }
 
     // 2) Build a simple text summary of all objects under S3_PREFIX
@@ -78,15 +87,17 @@ async function loadS3Index() {
         parts.push(shortKey);
       });
 
-      continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+      continuationToken = result.IsTruncated
+        ? result.NextContinuationToken
+        : undefined;
     } while (continuationToken);
 
     s3IndexSummary =
       parts.length > 0
-        ? `The OHLA I-5 project files in S3 include documents such as:\n- ${parts.join(
+        ? `The OHLA I-5 project files include documents such as:\n- ${parts.join(
             "\n- "
           )}\n\nUse these names when referring to documents (permits, RFIs, PCOs, specs, submittals, etc.).`
-        : "No project files were found in S3.";
+        : "No project files were found in the project document storage.";
 
     console.log("Built S3 index summary with", parts.length, "objects.");
   } catch (err) {
@@ -151,7 +162,7 @@ app.post("/api/chat", async (req, res) => {
     const systemPrompt = `
 You are "OHLA GPT — I-5 Project Assistant" for the Santa Clarita I-5 North County Enhancement Project.
 
-You have access to a summary of the OHLA I-5 project documents stored in an AWS S3 bucket (permits, RFIs, PCOs, contracts, submittals, specs, etc.). 
+You have access to a summary of the OHLA I-5 project documents stored in an internal project document storage (permits, RFIs, PCOs, contracts, submittals, specs, etc.).
 You also have general civil-construction knowledge.
 
 First, try to answer using the OHLA I-5 project context only. If the question clearly cannot be answered from project context, you may fall back on general knowledge, but you must clearly say when you are doing that.
@@ -159,9 +170,11 @@ First, try to answer using the OHLA I-5 project context only. If the question cl
 If the question asks for project financial / cost information and the user did not provide the correct admin password, respond ONLY with:
 "Financial questions need admin permission."
 
-Project file summary (from S3):
+If the user asks what platforms, tools, or APIs you use (for example OpenAI, Google Drive, AWS, S3, etc.), politely say that you are an internal OHLA project assistant and you do not discuss technical implementation details.
 
-${s3IndexSummary || "No S3 index is currently loaded."}
+Project file summary:
+
+${s3IndexSummary || "No project index is currently loaded."}
 
 If you reference a specific document, use its file name or folder like "RFI Log.xls", "Encroachment Permits", "Subcontractors contracts", etc.
 `;
