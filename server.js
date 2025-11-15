@@ -12,14 +12,11 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 // ===== OpenAI client =====
-if (!process.env.OPENAI_API_KEY) {
-  console.error("ERROR: OPENAI_API_KEY is not set.");
-}
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// ===== AWS SDK (S3 + future Textract) =====
+// ===== AWS SDK (S3 + Textract) =====
 const AWS_REGION = process.env.AWS_REGION || "us-east-2";
 const S3_BUCKET = process.env.S3_BUCKET;
 const S3_PREFIX = process.env.S3_PREFIX || "";
@@ -27,11 +24,12 @@ const S3_PREFIX = process.env.S3_PREFIX || "";
 AWS.config.update({ region: AWS_REGION });
 
 const s3 = new AWS.S3();
-// const textract = new AWS.Textract(); // reserved for future OCR
+const textract = new AWS.Textract();
 
 // ===== In-memory index of project files =====
 let s3IndexSummary = "";
 let s3IndexJson = null;
+let s3ObjectKeys = []; // list of keys relative to S3_PREFIX
 
 async function loadS3Index() {
   if (!S3_BUCKET) {
@@ -56,15 +54,9 @@ async function loadS3Index() {
 
       const json = JSON.parse(indexObj.Body.toString("utf-8"));
       s3IndexJson = json;
-      console.log(
-        "Loaded custom index.json from S3 with",
-        json.length,
-        "entries"
-      );
+      console.log("Loaded custom index.json from S3 with", json.length, "entries");
     } catch (err) {
-      console.log(
-        "No index.json found or failed to parse – proceeding with object list only."
-      );
+      console.log("No index.json found or failed to parse – proceeding with object list only.");
     }
 
     // 2) Build a simple text summary of all objects under S3_PREFIX
@@ -85,19 +77,18 @@ async function loadS3Index() {
         if (key.endsWith("/")) return; // folder marker
         const shortKey = S3_PREFIX ? key.replace(S3_PREFIX, "") : key;
         parts.push(shortKey);
+        s3ObjectKeys.push(shortKey);
       });
 
-      continuationToken = result.IsTruncated
-        ? result.NextContinuationToken
-        : undefined;
+      continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
     } while (continuationToken);
 
     s3IndexSummary =
       parts.length > 0
-        ? `The OHLA I-5 project files include documents such as:\n- ${parts.join(
+        ? `The OHLA I-5 project files in S3 include documents such as:\n- ${parts.join(
             "\n- "
           )}\n\nUse these names when referring to documents (permits, RFIs, PCOs, specs, submittals, etc.).`
-        : "No project files were found in the project document storage.";
+        : "No project files were found in S3.";
 
     console.log("Built S3 index summary with", parts.length, "objects.");
   } catch (err) {
@@ -134,6 +125,123 @@ function isFinancialQuestion(text) {
   return keywords.some((k) => lower.includes(k));
 }
 
+// ===== New helpers for Textract + caching =====
+
+// Find a mentioned file based on its base name appearing in the user message
+function findMentionedFile(userMessage) {
+  if (!userMessage || !s3ObjectKeys.length) return null;
+  const lowerMsg = userMessage.toLowerCase();
+
+  // Only look for obvious "read this file" type questions
+  const wantsRead =
+    lowerMsg.includes("read") ||
+    lowerMsg.includes("what does") ||
+    lowerMsg.includes("what is in") ||
+    lowerMsg.includes("summarize") ||
+    lowerMsg.includes("explain this permit") ||
+    lowerMsg.includes("explain this file");
+
+  if (!wantsRead) return null;
+
+  for (const relKey of s3ObjectKeys) {
+    const baseName = path.posix.basename(relKey).toLowerCase();
+    if (baseName.length < 5) continue;
+    if (lowerMsg.includes(baseName)) {
+      return relKey;
+    }
+  }
+
+  return null;
+}
+
+// Get text for an S3 document, using a cached TXT if available.
+// relKey is the key *relative to* S3_PREFIX, e.g. "18 Permits/0721ADP3197_Permit.pdf"
+async function getFileTextWithCache(relKey) {
+  if (!S3_BUCKET) {
+    console.log("getFileTextWithCache called but S3_BUCKET is not set");
+    return null;
+  }
+
+  if (!relKey) return null;
+
+  const fullKey = S3_PREFIX ? path.posix.join(S3_PREFIX, relKey) : relKey;
+  const cacheKey = S3_PREFIX
+    ? path.posix.join(S3_PREFIX, "_cache", relKey + ".txt")
+    : path.posix.join("_cache", relKey + ".txt");
+
+  console.log("Looking for cached text at:", cacheKey);
+
+  // 1) Try cache
+  try {
+    await s3
+      .headObject({
+        Bucket: S3_BUCKET,
+        Key: cacheKey,
+      })
+      .promise();
+
+    // If headObject didn't throw, cache exists
+    const cached = await s3
+      .getObject({
+        Bucket: S3_BUCKET,
+        Key: cacheKey,
+      })
+      .promise();
+
+    const cachedText = cached.Body.toString("utf-8");
+    console.log("Loaded cached text for", relKey, "length:", cachedText.length);
+    return { text: cachedText, fromCache: true };
+  } catch (err) {
+    console.log("No cached text found for", relKey, "- running Textract...");
+  }
+
+  // 2) Run Textract on the original document
+  try {
+    const texRes = await textract
+      .detectDocumentText({
+        Document: {
+          S3Object: {
+            Bucket: S3_BUCKET,
+            Name: fullKey,
+          },
+        },
+      })
+      .promise();
+
+    const lines =
+      texRes.Blocks?.filter((b) => b.BlockType === "LINE" && b.Text)
+        .map((b) => b.Text)
+        .join("\n") || "";
+
+    const text = lines.trim();
+    console.log("Textract extracted", text.length, "characters from", relKey);
+
+    if (!text) {
+      return { text: "", fromCache: false };
+    }
+
+    // 3) Save to cache
+    try {
+      await s3
+        .putObject({
+          Bucket: S3_BUCKET,
+          Key: cacheKey,
+          Body: text,
+          ContentType: "text/plain; charset=utf-8",
+        })
+        .promise();
+      console.log("Saved cached text to", cacheKey);
+    } catch (err) {
+      console.error("Failed to write cache object:", err);
+    }
+
+    return { text, fromCache: false };
+  } catch (err) {
+    console.error("Textract error for", fullKey, err);
+    return null;
+  }
+}
+
 // ===== Middleware =====
 app.use(cors());
 app.use(bodyParser.json());
@@ -158,11 +266,28 @@ app.post("/api/chat", async (req, res) => {
       }
     }
 
-    // 2) Build system prompt describing behaviour
+    // 2) See if the user is asking about a specific document we can OCR
+    let fileContextText = "";
+    let mentionedRelKey = null;
+
+    if (S3_BUCKET) {
+      mentionedRelKey = findMentionedFile(userMessage);
+      if (mentionedRelKey && mentionedRelKey.toLowerCase().endsWith(".pdf")) {
+        const fileResult = await getFileTextWithCache(mentionedRelKey);
+        if (fileResult && fileResult.text) {
+          // Limit size so we don't blow up the prompt
+          const maxChars = 15000;
+          const clipped = fileResult.text.slice(0, maxChars);
+          fileContextText = `\n\nThe user is asking specifically about the document "${mentionedRelKey}". Here is OCR text extracted from that file (first ${maxChars} characters):\n\n${clipped}\n\nUse this when answering questions about that document.`;
+        }
+      }
+    }
+
+    // 3) Build system prompt describing behaviour
     const systemPrompt = `
 You are "OHLA GPT — I-5 Project Assistant" for the Santa Clarita I-5 North County Enhancement Project.
 
-You have access to a summary of the OHLA I-5 project documents stored in an internal project document storage (permits, RFIs, PCOs, contracts, submittals, specs, etc.).
+You have access to a summary of the OHLA I-5 project documents stored in an AWS S3 bucket (permits, RFIs, PCOs, contracts, submittals, specs, etc.). 
 You also have general civil-construction knowledge.
 
 First, try to answer using the OHLA I-5 project context only. If the question clearly cannot be answered from project context, you may fall back on general knowledge, but you must clearly say when you are doing that.
@@ -170,16 +295,14 @@ First, try to answer using the OHLA I-5 project context only. If the question cl
 If the question asks for project financial / cost information and the user did not provide the correct admin password, respond ONLY with:
 "Financial questions need admin permission."
 
-If the user asks what platforms, tools, or APIs you use (for example OpenAI, Google Drive, AWS, S3, etc.), politely say that you are an internal OHLA project assistant and you do not discuss technical implementation details.
+Project file summary (from S3):
 
-Project file summary:
-
-${s3IndexSummary || "No project index is currently loaded."}
-
+${s3IndexSummary || "No S3 index is currently loaded."}
+${fileContextText}
 If you reference a specific document, use its file name or folder like "RFI Log.xls", "Encroachment Permits", "Subcontractors contracts", etc.
 `;
 
-    // 3) Optional: include a compact JSON index for better grounding
+    // 4) Optional: include a compact JSON index for better grounding
     const indexJsonSnippet = s3IndexJson
       ? JSON.stringify(s3IndexJson).slice(0, 6000) // keep prompt small
       : null;
@@ -221,6 +344,31 @@ If you reference a specific document, use its file name or folder like "RFI Log.
   }
 });
 
+// ===== Optional: direct file-reading API =====
+// You can call this from the frontend later if you want a "Read this file" button.
+app.post("/api/read-file", async (req, res) => {
+  try {
+    const relKey = req.body && req.body.relKey;
+    if (!relKey) {
+      return res.status(400).json({ error: "relKey (S3 key relative to prefix) is required." });
+    }
+
+    const result = await getFileTextWithCache(relKey);
+    if (!result) {
+      return res.status(500).json({ error: "Failed to extract text from file." });
+    }
+
+    res.json({
+      relKey,
+      fromCache: result.fromCache,
+      text: result.text,
+    });
+  } catch (err) {
+    console.error("Error in /api/read-file:", err);
+    res.status(500).json({ error: "Unexpected error in /api/read-file." });
+  }
+});
+
 // ===== Fallback: serve index.html =====
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
@@ -241,6 +389,6 @@ app.get("*", (req, res) => {
   await loadS3Index();
 
   app.listen(PORT, () => {
-    console.log(`OHLA GPT (S3 hybrid) running on port ${PORT}`);
+    console.log(`OHLA GPT (S3 hybrid + Textract) running on port ${PORT}`);
   });
 })();
