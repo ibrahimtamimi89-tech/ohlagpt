@@ -5,427 +5,550 @@
     <title>OHLA GPT — I-5 Project Assistant</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
+      :root {
+        --bg: #020617;
+        --bg-elevated: #020617;
+        --bg-panel: #020617;
+        --border-subtle: #1e293b;
+        --accent: #0ea5e9;
+        --accent-soft: rgba(14, 165, 233, 0.1);
+        --accent-strong: #22c55e;
+        --text-main: #e5e7eb;
+        --text-soft: #9ca3af;
+        --text-muted: #6b7280;
+        --danger: #f97373;
+      }
+
       * {
         box-sizing: border-box;
+      }
+
+      html,
+      body {
         margin: 0;
         padding: 0;
+        height: 100%;
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
           sans-serif;
+        background: radial-gradient(circle at top left, #0f172a, #020617 45%);
+        color: var(--text-main);
       }
+
       body {
-        background: #050816;
-        color: #f9fafb;
-        min-height: 100vh;
         display: flex;
+        align-items: stretch;
         justify-content: center;
-        align-items: flex-start;
-        padding: 24px;
       }
-      .app {
+
+      .app-shell {
         width: 100%;
-        max-width: 1100px;
-        border-radius: 16px;
-        background: radial-gradient(circle at top, #111827, #020617);
+        max-width: 1200px;
+        margin: 16px;
+        background: linear-gradient(
+          135deg,
+          rgba(15, 23, 42, 0.96),
+          rgba(15, 23, 42, 0.98)
+        );
+        border-radius: 18px;
         border: 1px solid #1f2937;
-        box-shadow: 0 25px 60px rgba(15, 23, 42, 0.9);
+        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.9);
         display: grid;
-        grid-template-columns: minmax(0, 3fr) minmax(280px, 1.3fr);
+        grid-template-columns: minmax(0, 3.5fr) minmax(260px, 1.2fr);
         overflow: hidden;
       }
+
       @media (max-width: 900px) {
-        .app {
-          display: block;
+        .app-shell {
+          grid-template-columns: 1fr;
+        }
+        .sidebar {
+          border-left: none;
+          border-top: 1px solid var(--border-subtle);
         }
       }
-      .chat-pane {
-        padding: 20px 22px 16px;
-        border-right: 1px solid #1f2937;
-        position: relative;
-        overflow: hidden;
-      }
-      .right-pane {
-        padding: 20px;
-        background: linear-gradient(180deg, #020617 0%, #020617 40%, #030712 100%);
+
+      .main {
         display: flex;
         flex-direction: column;
+        padding: 16px 18px 12px 18px;
+      }
+
+      .header {
+        padding-bottom: 6px;
+        border-bottom: 1px solid rgba(31, 41, 55, 0.9);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
         justify-content: space-between;
       }
-      .logo-watermark {
-        position: absolute;
-        inset: 80px 0 80px 0;
+
+      .title-block {
         display: flex;
-        justify-content: center;
+        flex-direction: column;
+      }
+
+      .title {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        display: flex;
         align-items: center;
-        pointer-events: none;
-        opacity: 0.06;
+        gap: 6px;
       }
-      .logo-watermark img {
-        max-width: 420px;
-        width: 70%;
+
+      .title-badge {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 7px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.8);
+        color: #cbd5f5;
+        text-transform: uppercase;
       }
-      .chat-header {
-        margin-bottom: 6px;
+
+      .subtitle {
+        font-size: 11px;
+        color: var(--text-soft);
+        margin-top: 3px;
+      }
+
+      .designed-by {
+        font-size: 10px;
+        color: var(--text-muted);
+        text-align: right;
+      }
+
+      .designed-by span {
+        color: #e5e7eb;
+        font-weight: 500;
+      }
+
+      .chat-panel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      #chat-messages {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 8px 4px 8px 0;
+        scroll-behavior: smooth;
+      }
+
+      .message {
+        max-width: 80%;
+        padding: 8px 10px;
+        border-radius: 10px;
+        margin: 4px 0;
+        font-size: 13px;
+        line-height: 1.4;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+
+      .message.user {
+        align-self: flex-end;
+        background: linear-gradient(135deg, #0ea5e9, #22c55e);
+        color: #0b1220;
+        border-bottom-right-radius: 2px;
+      }
+
+      .message.assistant {
+        align-self: flex-start;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(30, 64, 175, 0.6);
+        border-bottom-left-radius: 2px;
+      }
+
+      .message.assistant pre {
+        margin: 4px 0 0 0;
+      }
+
+      .input-row {
+        margin-top: 6px;
         display: flex;
         flex-direction: column;
         gap: 4px;
       }
-      .chat-header-title {
-        font-size: 15px;
-        font-weight: 600;
-      }
-      .chat-header-sub {
-        font-size: 11px;
-        color: #9ca3af;
-      }
-      .messages {
-        position: relative;
-        z-index: 1;
-        max-height: 480px;
-        overflow-y: auto;
-        padding-right: 6px;
-        margin-top: 8px;
-        margin-bottom: 16px;
-      }
-      .bubble {
-        margin-bottom: 10px;
-        padding: 10px 12px;
-        border-radius: 10px;
-        font-size: 13px;
-        line-height: 1.5;
-        max-width: 90%;
-        white-space: pre-wrap;
-      }
-      .bubble.user {
-        margin-left: auto;
-        background: #2563eb;
-      }
-      .bubble.bot {
-        background: rgba(17, 24, 39, 0.85);
-        border: 1px solid #1f2937;
-      }
-      .pill {
-        display: inline-flex;
-        padding: 2px 8px;
-        border-radius: 999px;
-        font-size: 11px;
-        background: #111827;
-        color: #9ca3af;
-        margin-bottom: 6px;
-      }
-      .input-row {
-        position: relative;
+
+      .input-main {
         display: flex;
-        gap: 8px;
-        z-index: 2;
-      }
-      .input-row input[type="text"] {
-        flex: 1;
-        border-radius: 999px;
-        border: 1px solid #1f2937;
-        background: rgba(15, 23, 42, 0.95);
-        padding: 10px 14px;
-        color: #e5e7eb;
-        font-size: 13px;
-      }
-      .input-row input::placeholder {
-        color: #6b7280;
-      }
-      .input-row button {
-        border-radius: 999px;
-        padding: 0 16px;
-        background: #2563eb;
-        border: none;
-        color: white;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .input-row button:disabled {
-        opacity: 0.6;
-        cursor: default;
-      }
-      .clock-card {
-        background: radial-gradient(circle at top, #111827, #020617);
-        border-radius: 14px;
-        padding: 14px 16px;
-        border: 1px solid #1f2937;
-        display: flex;
-        justify-content: space-between;
+        gap: 6px;
         align-items: center;
-        margin-bottom: 12px;
       }
-      .clock-time {
-        font-size: 20px;
-        font-weight: 600;
-      }
-      .clock-sub {
-        font-size: 11px;
-        color: #9ca3af;
-      }
-      .how-it-works {
-        border-radius: 14px;
-        border: 1px solid #1f2937;
-        padding: 14px 15px;
-        font-size: 12px;
-        background: rgba(15, 23, 42, 0.8);
-        margin-top: 10px;
-      }
-      .how-it-works h3 {
+
+      #chat-input {
+        flex: 1;
+        background: rgba(15, 23, 42, 0.95);
+        border-radius: 999px;
+        border: 1px solid rgba(55, 65, 81, 0.9);
+        padding: 9px 14px;
+        outline: none;
         font-size: 13px;
-        margin-bottom: 8px;
+        color: var(--text-main);
       }
-      .how-it-works ul {
-        padding-left: 18px;
+
+      #chat-input::placeholder {
+        color: #64748b;
       }
-      .how-it-works li {
-        margin-bottom: 5px;
-        color: #d1d5db;
-      }
-      .footer {
-        margin-top: 18px;
-        font-size: 11px;
-        text-align: center;
-        color: #9ca3af;
-      }
-      .footer strong {
-        color: #f9fafb;
-      }
-      .yes-no-row {
-        display: flex;
-        gap: 8px;
-        margin-top: 6px;
-      }
-      .yes-no-row button {
-        font-size: 11px;
-        padding: 4px 10px;
+
+      #send-btn {
         border-radius: 999px;
         border: none;
+        background: radial-gradient(circle at top left, #22c55e, #0ea5e9);
+        color: #020617;
+        font-weight: 600;
+        font-size: 13px;
+        padding: 8px 16px;
         cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
       }
-      .yes-btn {
-        background: #16a34a;
-        color: white;
+
+      #send-btn:hover {
+        filter: brightness(1.03);
       }
-      .no-btn {
-        background: #374151;
-        color: #e5e7eb;
+
+      .password-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
       }
-      .small-input {
-        margin-top: 6px;
+
+      #finance-password {
+        width: 110px;
+        background: rgba(15, 23, 42, 0.95);
+        border-radius: 999px;
+        border: 1px dashed rgba(75, 85, 99, 0.9);
+        padding: 6px 10px;
+        outline: none;
+        font-size: 11px;
+        color: var(--text-main);
+      }
+
+      .password-label {
+        font-size: 10px;
+        color: var(--text-muted);
+      }
+
+      .sidebar {
+        border-left: 1px solid rgba(31, 41, 55, 0.9);
+        padding: 14px 16px 10px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        background: radial-gradient(
+          circle at top,
+          rgba(15, 118, 110, 0.35),
+          #020617 55%
+        );
+      }
+
+      .clock-card {
+        border-radius: 14px;
+        padding: 10px 12px;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(55, 65, 81, 0.8);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .clock-time {
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+      }
+
+      .clock-date {
+        font-size: 11px;
+        color: var(--text-soft);
+      }
+
+      .how-card {
+        margin-top: 4px;
+        border-radius: 14px;
+        padding: 10px 12px;
+        background: rgba(15, 23, 42, 0.96);
+        border: 1px solid rgba(55, 65, 81, 0.9);
         font-size: 11px;
       }
-      .small-input input {
-        width: 100%;
-        margin-top: 4px;
-        border-radius: 6px;
-        border: 1px solid #374151;
-        background: #020617;
+
+      .how-title {
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+
+      .how-list {
+        padding-left: 15px;
+        margin: 4px 0 0 0;
+        color: var(--text-soft);
+      }
+
+      .how-list li {
+        margin-bottom: 4px;
+      }
+
+      .footer-note {
+        margin-top: auto;
+        font-size: 9.5px;
+        color: var(--text-muted);
+        text-align: center;
+      }
+
+      .footer-note span {
         color: #e5e7eb;
-        padding: 5px 6px;
+        font-weight: 500;
+      }
+
+      /* Preview block (OCR text) */
+
+      .preview-block {
+        margin-top: 4px;
+        font-size: 11px;
+      }
+
+      .preview-block summary {
+        cursor: pointer;
+        color: #a5b4fc;
+      }
+
+      .preview-block summary:hover {
+        color: #c4b5fd;
+      }
+
+      .preview-block pre {
+        white-space: pre-wrap;
+        background: #020617;
+        border-radius: 8px;
+        border: 1px solid rgba(55, 65, 81, 0.9);
+        padding: 8px 10px;
+        margin-top: 6px;
+        max-height: 260px;
+        overflow-y: auto;
+      }
+
+      /* Scrollbar tweaks */
+      #chat-messages::-webkit-scrollbar,
+      .preview-block pre::-webkit-scrollbar {
+        width: 6px;
+      }
+      #chat-messages::-webkit-scrollbar-track,
+      .preview-block pre::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      #chat-messages::-webkit-scrollbar-thumb,
+      .preview-block pre::-webkit-scrollbar-thumb {
+        background: #374151;
+        border-radius: 999px;
       }
     </style>
   </head>
   <body>
-    <div class="app">
-      <!-- LEFT: chat -->
-      <div class="chat-pane">
-        <div class="logo-watermark">
-          <img src="logo.png" alt="OHLA USA" />
-        </div>
-
-        <div class="chat-header">
-          <div class="chat-header-title">
-            OHLA GPT — I-5 Project Assistant
-          </div>
-          <div class="chat-header-sub">
-            Santa Clarita I-5 North County Enhancement Project
-          </div>
-        </div>
-
-        <div id="messages" class="messages"></div>
-
-        <form id="chat-form" class="input-row">
-          <input
-            id="chat-input"
-            type="text"
-            autocomplete="off"
-            placeholder="Ask about the I-5 project files, RFIs, PCOs, permits, specs, or submittals..."
-          />
-          <button id="send-btn" type="submit">Send</button>
-        </form>
-      </div>
-
-      <!-- RIGHT: clock + info -->
-      <div class="right-pane">
-        <div>
-          <div class="clock-card">
-            <div>
-              <div class="clock-time" id="clock-time">--:--:--</div>
-              <div class="clock-sub" id="clock-date">Local time</div>
+    <div class="app-shell">
+      <div class="main">
+        <div class="header">
+          <div class="title-block">
+            <div class="title">
+              OHLA GPT — I-5 Project Assistant
+              <span class="title-badge">Santa Clarita I-5</span>
+            </div>
+            <div class="subtitle">
+              Santa Clarita I-5 North County Enhancement Project
             </div>
           </div>
-
-          <div class="how-it-works">
-            <h3>How this assistant works</h3>
-            <ul>
-              <li>
-                Uses OHLA I-5 project documents (permits, RFIs, PCOs, contracts,
-                submittals, specs) stored in a private AWS S3 bucket.
-              </li>
-              <li>
-                First tries to answer from project files. If the answer isn’t
-                clear, it may fall back to general civil-construction knowledge.
-              </li>
-              <li>
-                Financial &amp; cost-related questions require admin permission
-                and may ask for a password.
-              </li>
-            </ul>
+          <div class="designed-by">
+            Designed by <span>Ibrahim Altamimi</span><br />
+            OHLA USA, Inc., I-5 Project — California
           </div>
         </div>
 
-        <div class="footer">
-          Designed by: <strong>Ibrahim Altamimi</strong><br />
-          OHLA USA, Inc., I-5 Project – California
+        <div class="chat-panel">
+          <div id="chat-messages"></div>
+
+          <div class="input-row">
+            <div class="input-main">
+              <input
+                id="chat-input"
+                type="text"
+                autocomplete="off"
+                placeholder="Ask about the I-5 project files, RFIs, PCOs, permits, specs, or submittals..."
+              />
+              <button id="send-btn" onclick="sendMessage()">
+                Send
+              </button>
+            </div>
+
+            <div class="password-row">
+              <span class="password-label">
+                Admin password for financial questions (optional):
+              </span>
+              <input
+                id="finance-password"
+                type="password"
+                autocomplete="off"
+                placeholder="••••••"
+              />
+            </div>
+          </div>
         </div>
       </div>
+
+      <aside class="sidebar">
+        <div class="clock-card">
+          <div id="clock-time" class="clock-time">--:--:--</div>
+          <div id="clock-date" class="clock-date"></div>
+        </div>
+
+        <div class="how-card">
+          <div class="how-title">How this assistant works</div>
+          <ul class="how-list">
+            <li>
+              Uses OHLA I-5 project documents: permits, POTD, RFIs, PCOs, subcontractor contracts, project contract
+              submittals, Caltrans & Metro specs.
+            </li>
+            <li>
+              First tries to answer from project files. If the answer isn’t
+              clear, it may fall back to general civil-construction knowledge.
+            </li>
+            <li>
+              Some documents are read using AWS Textract. You may see a
+              collapsible <em>“extracted text preview”</em> when a specific file
+              is used.
+            </li>
+            <li>
+              Financial &amp; cost-related questions require admin permission
+              and may ask for a password.
+            </li>
+          </ul>
+        </div>
+
+        <div class="footer-note">
+          This assistant is a helper only and does not replace official contract
+          documents.<br />
+          Always verify critical information against signed plans/specs.
+        </div>
+      </aside>
     </div>
 
     <script>
-      const messagesEl = document.getElementById("messages");
-      const formEl = document.getElementById("chat-form");
+      const messagesEl = document.getElementById("chat-messages");
       const inputEl = document.getElementById("chat-input");
-      const sendBtn = document.getElementById("send-btn");
+      const passwordEl = document.getElementById("finance-password");
 
-      let pendingCheckInternet = false;
-      let storedFinancePassword = "";
-
-      function appendMessage(role, text) {
+      function addMessage(role, text) {
         const div = document.createElement("div");
-        div.className = "bubble " + (role === "user" ? "user" : "bot");
+        div.className = "message " + role;
         div.textContent = text;
         messagesEl.appendChild(div);
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
-      function appendBotWithOptions(promptText) {
-        const wrapper = document.createElement("div");
-        wrapper.className = "bubble bot";
-        wrapper.innerHTML =
-          promptText +
-          '<div class="yes-no-row"><button class="yes-btn" id="yes-btn">Yes, check internet</button><button class="no-btn" id="no-btn">No</button></div>';
-        messagesEl.appendChild(wrapper);
+      function addHtmlMessage(role, html) {
+        const div = document.createElement("div");
+        div.className = "message " + role;
+        div.innerHTML = html;
+        messagesEl.appendChild(div);
         messagesEl.scrollTop = messagesEl.scrollHeight;
-
-        document.getElementById("yes-btn").onclick = () => {
-          pendingCheckInternet = false;
-          appendMessage(
-            "user",
-            "Yes, you can use general knowledge if needed."
-          );
-          sendToServer(
-            "You may use general (internet-like) knowledge to answer my last question."
-          );
-        };
-        document.getElementById("no-btn").onclick = () => {
-          pendingCheckInternet = false;
-          appendMessage(
-            "bot",
-            "Okay. I will stay within the current I-5 project information."
-          );
-        };
       }
 
-      async function sendToServer(message) {
+      async function sendMessage() {
+        const text = inputEl.value.trim();
+        if (!text) return;
+
+        const financePassword = passwordEl.value.trim();
+
+        addMessage("user", text);
+        inputEl.value = "";
+
         try {
-          sendBtn.disabled = true;
-
-          const body = {
-            message,
-          };
-
-          if (storedFinancePassword) {
-            body.financePassword = storedFinancePassword;
-          }
-
-          const res = await fetch("/api/chat", {
+          const resp = await fetch("/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
+            body: JSON.stringify({
+              message: text,
+              financePassword: financePassword || undefined,
+            }),
           });
 
-          const data = await res.json();
+          const data = await resp.json();
+          addMessage("assistant", data.answer || "");
 
-          if (data.needsPassword) {
-            // ask for password once
-            const pwWrapper = document.createElement("div");
-            pwWrapper.className = "bubble bot";
-            pwWrapper.innerHTML =
-              'Financial questions need admin permission.<div class="small-input">Enter admin password to allow financial questions:<br/><input id="pw-input" type="password" /></div>';
-            messagesEl.appendChild(pwWrapper);
-            messagesEl.scrollTop = messagesEl.scrollHeight;
+          // OCR preview
+          if (data.preview && data.preview.text) {
+            const filename = data.preview.filename || "document";
+            const snippet = data.preview.text;
 
-            document.getElementById("pw-input").addEventListener("keydown", (e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                storedFinancePassword = e.target.value.trim();
-                appendMessage(
-                  "user",
-                  "Using admin password to ask the financial question."
-                );
-                sendToServer(message);
-              }
-            });
-            return;
+            const html =
+              `<details class="preview-block">` +
+              `<summary>Show extracted text preview from <b>${escapeHtml(
+                filename
+              )}</b></summary>` +
+              `<pre>${escapeHtml(snippet)}</pre>` +
+              `</details>`;
+
+            addHtmlMessage("assistant", html);
           }
 
-          // Normal answer
-          appendMessage("bot", data.answer || "No answer.");
+          if (data.needsPassword) {
+            passwordEl.focus();
+          }
         } catch (err) {
           console.error(err);
-          appendMessage(
-            "bot",
-            "Sorry, something went wrong while talking to the assistant."
+          addMessage(
+            "assistant",
+            "Sorry, I had a problem connecting to the server."
           );
-        } finally {
-          sendBtn.disabled = false;
         }
       }
 
-      formEl.addEventListener("submit", (e) => {
-        e.preventDefault();
-        const text = inputEl.value.trim();
-        if (!text) return;
-        appendMessage("user", text);
-        inputEl.value = "";
-        sendToServer(text);
-      });
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
 
-      // Allow pressing Enter to send
       inputEl.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
-          formEl.dispatchEvent(new Event("submit"));
+          sendMessage();
         }
       });
 
-      // Digital clock
+      // Initial greeting
+      window.addEventListener("load", () => {
+        addMessage(
+          "assistant",
+          "Hello, this is the OHLA I-5 project assistant. How can I help you today?"
+        );
+        updateClock();
+        setInterval(updateClock, 1000);
+      });
+
       function updateClock() {
         const now = new Date();
+        const timeEl = document.getElementById("clock-time");
+        const dateEl = document.getElementById("clock-date");
+
         const hh = String(now.getHours()).padStart(2, "0");
         const mm = String(now.getMinutes()).padStart(2, "0");
         const ss = String(now.getSeconds()).padStart(2, "0");
-        document.getElementById("clock-time").textContent = `${hh}:${mm}:${ss}`;
-        document.getElementById("clock-date").textContent = now.toDateString();
-      }
-      updateClock();
-      setInterval(updateClock, 1000);
+        timeEl.textContent = `${hh}:${mm}:${ss}`;
 
-      // Initial greeting
-      appendMessage(
-        "bot",
-        "Hello, this is the OHLA I-5 project assistant. How can I help you today?"
-      );
+        const opts = {
+          weekday: "short",
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        };
+        dateEl.textContent = now.toLocaleDateString(undefined, opts);
+      }
     </script>
   </body>
 </html>

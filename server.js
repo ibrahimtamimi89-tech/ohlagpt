@@ -11,25 +11,25 @@ const AWS = require("aws-sdk");
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// ===== OpenAI client =====
+// ========== OpenAI client ==========
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// ===== AWS SDK (S3 + Textract) =====
+// ========== AWS SDK (S3 + Textract) ==========
 const AWS_REGION = process.env.AWS_REGION || "us-east-2";
 const S3_BUCKET = process.env.S3_BUCKET;
-const S3_PREFIX = process.env.S3_PREFIX || "";
+const S3_PREFIX = process.env.S3_PREFIX || "GPT Files/";
 
 AWS.config.update({ region: AWS_REGION });
 
 const s3 = new AWS.S3();
 const textract = new AWS.Textract();
 
-// ===== In-memory index of project files =====
+// ========== In-memory S3 index ==========
 let s3IndexSummary = "";
+let s3ObjectKeys = []; // full S3 keys
 let s3IndexJson = null;
-let s3ObjectKeys = []; // list of keys relative to S3_PREFIX
 
 async function loadS3Index() {
   if (!S3_BUCKET) {
@@ -43,7 +43,7 @@ async function loadS3Index() {
   console.log("S3_PREFIX:", S3_PREFIX);
 
   try {
-    // 1) Try optional index.json (human-maintained)
+    // 1) Optional custom index.json (hand-maintained)
     try {
       const indexObj = await s3
         .getObject({
@@ -54,13 +54,20 @@ async function loadS3Index() {
 
       const json = JSON.parse(indexObj.Body.toString("utf-8"));
       s3IndexJson = json;
-      console.log("Loaded custom index.json from S3 with", json.length, "entries");
+      console.log(
+        "Loaded custom index.json from S3 with",
+        Array.isArray(json) ? json.length : 0,
+        "entries"
+      );
     } catch (err) {
-      console.log("No index.json found or failed to parse – proceeding with object list only.");
+      console.log(
+        "No index.json found or failed to parse – proceeding with object list only."
+      );
     }
 
-    // 2) Build a simple text summary of all objects under S3_PREFIX
+    // 2) List all objects under prefix for filename search
     const parts = [];
+    s3ObjectKeys = [];
     let continuationToken = undefined;
 
     do {
@@ -75,12 +82,15 @@ async function loadS3Index() {
       (result.Contents || []).forEach((obj) => {
         const key = obj.Key;
         if (key.endsWith("/")) return; // folder marker
-        const shortKey = S3_PREFIX ? key.replace(S3_PREFIX, "") : key;
+        s3ObjectKeys.push(key);
+
+        const shortKey = key.replace(S3_PREFIX, "");
         parts.push(shortKey);
-        s3ObjectKeys.push(shortKey);
       });
 
-      continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+      continuationToken = result.IsTruncated
+        ? result.NextContinuationToken
+        : undefined;
     } while (continuationToken);
 
     s3IndexSummary =
@@ -90,13 +100,21 @@ async function loadS3Index() {
           )}\n\nUse these names when referring to documents (permits, RFIs, PCOs, specs, submittals, etc.).`
         : "No project files were found in S3.";
 
-    console.log("Built S3 index summary with", parts.length, "objects.");
+    console.log(
+      "Built S3 index summary with",
+      parts.length,
+      "objects (",
+      s3ObjectKeys.length,
+      "keys )."
+    );
   } catch (err) {
     console.error("Error while loading S3 index:", err);
   }
 }
 
-// simple helper to very roughly detect “financial / cost” questions
+// ========== Helpers ==========
+
+// very rough financial question detector
 function isFinancialQuestion(text) {
   if (!text) return false;
   const lower = text.toLowerCase();
@@ -125,172 +143,209 @@ function isFinancialQuestion(text) {
   return keywords.some((k) => lower.includes(k));
 }
 
-// ===== New helpers for Textract + caching =====
+// find S3 key(s) for a filename mentioned in the user message
+function findS3KeyForFilename(filename) {
+  if (!filename || !s3ObjectKeys || s3ObjectKeys.length === 0) return null;
+  const lowerName = filename.toLowerCase();
 
-// Find a mentioned file based on its base name appearing in the user message
-function findMentionedFile(userMessage) {
-  if (!userMessage || !s3ObjectKeys.length) return null;
-  const lowerMsg = userMessage.toLowerCase();
+  const match = s3ObjectKeys.find((key) =>
+    key.toLowerCase().endsWith(lowerName)
+  );
 
-  // Only look for obvious "read this file" type questions
-  const wantsRead =
-    lowerMsg.includes("read") ||
-    lowerMsg.includes("what does") ||
-    lowerMsg.includes("what is in") ||
-    lowerMsg.includes("summarize") ||
-    lowerMsg.includes("explain this permit") ||
-    lowerMsg.includes("explain this file");
-
-  if (!wantsRead) return null;
-
-  for (const relKey of s3ObjectKeys) {
-    const baseName = path.posix.basename(relKey).toLowerCase();
-    if (baseName.length < 5) continue;
-    if (lowerMsg.includes(baseName)) {
-      return relKey;
-    }
-  }
-
-  return null;
+  return match || null;
 }
 
-// Get text for an S3 document, using a cached TXT if available.
-// relKey is the key *relative to* S3_PREFIX, e.g. "18 Permits/0721ADP3197_Permit.pdf"
-async function getFileTextWithCache(relKey) {
-  if (!S3_BUCKET) {
-    console.log("getFileTextWithCache called but S3_BUCKET is not set");
-    return null;
-  }
+// extract first filename like "something.pdf" from text
+function extractFilenameFromText(text) {
+  if (!text) return null;
+  const regex = /([0-9A-Za-z_\-\.]+?\.(pdf|docx?|xlsx?|xls))/i;
+  const m = text.match(regex);
+  return m ? m[1] : null;
+}
 
-  if (!relKey) return null;
+// Textract + S3-based cache
+async function getDocumentTextFromS3Key(s3Key) {
+  if (!S3_BUCKET || !s3Key) return null;
 
-  const fullKey = S3_PREFIX ? path.posix.join(S3_PREFIX, relKey) : relKey;
-  const cacheKey = S3_PREFIX
-    ? path.posix.join(S3_PREFIX, "_cache", relKey + ".txt")
-    : path.posix.join("_cache", relKey + ".txt");
+  // cache key: <S3_PREFIX>__cache/<relative_path>.txt
+  const relative = s3Key.replace(S3_PREFIX, "");
+  const cacheKey = path.posix.join(S3_PREFIX, "__cache", relative + ".txt");
 
   console.log("Looking for cached text at:", cacheKey);
 
-  // 1) Try cache
+  // 1) Try cache first
   try {
-    await s3
-      .headObject({
-        Bucket: S3_BUCKET,
-        Key: cacheKey,
-      })
-      .promise();
-
-    // If headObject didn't throw, cache exists
-    const cached = await s3
+    const cacheObj = await s3
       .getObject({
         Bucket: S3_BUCKET,
         Key: cacheKey,
       })
       .promise();
 
-    const cachedText = cached.Body.toString("utf-8");
-    console.log("Loaded cached text for", relKey, "length:", cachedText.length);
-    return { text: cachedText, fromCache: true };
+    const cachedText = cacheObj.Body.toString("utf-8");
+    console.log("✓ Cache hit for", s3Key);
+    return cachedText;
   } catch (err) {
-    console.log("No cached text found for", relKey, "- running Textract...");
+    if (err.code !== "NoSuchKey") {
+      console.warn(
+        "Cache lookup error for",
+        cacheKey,
+        "- proceeding to Textract:",
+        err.code || err.message
+      );
+    } else {
+      console.log("No cached text found for", cacheKey);
+    }
   }
 
-  // 2) Run Textract on the original document
+  console.log("No cached text for", s3Key, "– running Textract...");
+
+  // 2) Call Textract directly on S3 object
+  let texResult;
   try {
-    const texRes = await textract
+    texResult = await textract
       .detectDocumentText({
         Document: {
           S3Object: {
             Bucket: S3_BUCKET,
-            Name: fullKey,
+            Name: s3Key,
           },
         },
       })
       .promise();
-
-    const lines =
-      texRes.Blocks?.filter((b) => b.BlockType === "LINE" && b.Text)
-        .map((b) => b.Text)
-        .join("\n") || "";
-
-    const text = lines.trim();
-    console.log("Textract extracted", text.length, "characters from", relKey);
-
-    if (!text) {
-      return { text: "", fromCache: false };
-    }
-
-    // 3) Save to cache
-    try {
-      await s3
-        .putObject({
-          Bucket: S3_BUCKET,
-          Key: cacheKey,
-          Body: text,
-          ContentType: "text/plain; charset=utf-8",
-        })
-        .promise();
-      console.log("Saved cached text to", cacheKey);
-    } catch (err) {
-      console.error("Failed to write cache object:", err);
-    }
-
-    return { text, fromCache: false };
   } catch (err) {
-    console.error("Textract error for", fullKey, err);
-    return null;
+    console.error(
+      "Textract error for",
+      s3Key,
+      "-",
+      err.code || err.message || err
+    );
+    throw err;
   }
+
+  const lines = (texResult.Blocks || [])
+    .filter((b) => b.BlockType === "LINE" && b.Text)
+    .map((b) => b.Text.trim());
+
+  const text = lines.join("\n");
+
+  console.log(
+    "Textract completed for",
+    s3Key,
+    "- extracted",
+    lines.length,
+    "lines."
+  );
+
+  // 3) Save to cache (best effort)
+  try {
+    await s3
+      .putObject({
+        Bucket: S3_BUCKET,
+        Key: cacheKey,
+        Body: text,
+        ContentType: "text/plain; charset=utf-8",
+      })
+      .promise();
+    console.log("Cached Textract text at", cacheKey);
+  } catch (err) {
+    console.warn("Failed to write cache object", cacheKey, "-", err.message);
+  }
+
+  return text;
 }
 
-// ===== Middleware =====
+// ========== Middleware ==========
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// ===== API: chat =====
+// ========== API: /api/chat ==========
 app.post("/api/chat", async (req, res) => {
   try {
     const userMessage = (req.body && req.body.message) || "";
     const financePassword = (req.body && req.body.financePassword) || "";
     const FINANCE_PASSWORD = process.env.FINANCE_PASSWORD || "";
 
+    console.log("=== Incoming question ===");
+    console.log("Q:", userMessage);
+
     // 1) Financial guardrail
     if (isFinancialQuestion(userMessage)) {
+      console.log("Detected financial question.");
       if (!FINANCE_PASSWORD || financePassword !== FINANCE_PASSWORD) {
+        console.log("Rejected – missing or incorrect FINANCE_PASSWORD.");
         return res.json({
           fromFiles: true,
           answer:
             "Financial questions need admin permission. Please provide the admin password to proceed.",
           needsPassword: true,
         });
+      } else {
+        console.log("Finance password accepted.");
       }
     }
 
-    // 2) See if the user is asking about a specific document we can OCR
+    // 2) Try to detect a filename and get OCR text
+    let preview = null;
     let fileContextText = "";
-    let mentionedRelKey = null;
+    const filename = extractFilenameFromText(userMessage);
 
-    if (S3_BUCKET) {
-      mentionedRelKey = findMentionedFile(userMessage);
-      if (mentionedRelKey && mentionedRelKey.toLowerCase().endsWith(".pdf")) {
-        const fileResult = await getFileTextWithCache(mentionedRelKey);
-        if (fileResult && fileResult.text) {
-          // Limit size so we don't blow up the prompt
-          const maxChars = 15000;
-          const clipped = fileResult.text.slice(0, maxChars);
-          fileContextText = `\n\nThe user is asking specifically about the document "${mentionedRelKey}". Here is OCR text extracted from that file (first ${maxChars} characters):\n\n${clipped}\n\nUse this when answering questions about that document.`;
+    if (filename) {
+      console.log("Detected filename in question:", filename);
+      const s3Key = findS3KeyForFilename(filename);
+
+      if (s3Key) {
+        console.log("Matched filename to S3 key:", s3Key);
+
+        try {
+          const fullText = await getDocumentTextFromS3Key(s3Key);
+
+          if (fullText && fullText.trim()) {
+            // keep a chunk for the model, and a shorter chunk for the UI preview
+            const maxForModel = 6000;
+            const maxForPreview = 1500;
+
+            fileContextText = fullText.slice(0, maxForModel);
+            preview = {
+              filename,
+              s3Key,
+              text: fullText.slice(0, maxForPreview),
+            };
+          } else {
+            console.log(
+              "Textract returned empty text for",
+              s3Key,
+              "- no preview."
+            );
+          }
+        } catch (err) {
+          console.error(
+            "Error while getting Textract text for",
+            filename,
+            "-",
+            err.code || err.message
+          );
         }
+      } else {
+        console.log(
+          "Could not match filename",
+          filename,
+          "to any S3 key in the index."
+        );
       }
+    } else {
+      console.log("No filename detected in question.");
     }
 
     // 3) Build system prompt describing behaviour
     const systemPrompt = `
 You are "OHLA GPT — I-5 Project Assistant" for the Santa Clarita I-5 North County Enhancement Project.
 
-You have access to a summary of the OHLA I-5 project documents stored in an AWS S3 bucket (permits, RFIs, PCOs, contracts, submittals, specs, etc.). 
+You know about OHLA I-5 project documents stored in an AWS S3 bucket (permits, RFIs, PCOs, contracts, submittals, specs, etc.).
 You also have general civil-construction knowledge.
 
-First, try to answer using the OHLA I-5 project context only. If the question clearly cannot be answered from project context, you may fall back on general knowledge, but you must clearly say when you are doing that.
+First, try to answer using the OHLA I-5 project context only. If the question clearly cannot be answered from project context, you may fall back on general knowledge, but clearly say when you do so.
 
 If the question asks for project financial / cost information and the user did not provide the correct admin password, respond ONLY with:
 "Financial questions need admin permission."
@@ -298,13 +353,16 @@ If the question asks for project financial / cost information and the user did n
 Project file summary (from S3):
 
 ${s3IndexSummary || "No S3 index is currently loaded."}
-${fileContextText}
-If you reference a specific document, use its file name or folder like "RFI Log.xls", "Encroachment Permits", "Subcontractors contracts", etc.
+
+${
+  fileContextText
+    ? `\n\nIf the user is asking about the file "${filename}", here is OCR text extracted from that document (possibly truncated):\n\n${fileContextText}\n\nUse this document text as the primary source when answering. Summarize and explain in plain language.`
+    : ""
+}
 `;
 
-    // 4) Optional: include a compact JSON index for better grounding
     const indexJsonSnippet = s3IndexJson
-      ? JSON.stringify(s3IndexJson).slice(0, 6000) // keep prompt small
+      ? JSON.stringify(s3IndexJson).slice(0, 6000)
       : null;
 
     const messages = [
@@ -316,10 +374,7 @@ If you reference a specific document, use its file name or folder like "RFI Log.
             ? `\n\nAdditional machine-readable index data:\n${indexJsonSnippet}\n`
             : ""),
       },
-      {
-        role: "user",
-        content: userMessage,
-      },
+      { role: "user", content: userMessage },
     ];
 
     const completion = await openai.chat.completions.create({
@@ -330,51 +385,30 @@ If you reference a specific document, use its file name or folder like "RFI Log.
 
     const answer = completion.choices[0].message.content.trim();
 
+    console.log("Answer length:", answer.length, "chars");
+
     res.json({
-      fromFiles: true, // primary source is project context (plus model’s knowledge)
+      fromFiles: true,
       answer,
       needsPassword: false,
+      preview, // <-- OCR preview for the UI
     });
   } catch (err) {
     console.error("Error in /api/chat:", err);
     res.status(500).json({
       fromFiles: false,
-      answer: "Sorry, something went wrong while processing your request.",
+      answer:
+        "Sorry, something went wrong while processing your request. Please try again.",
     });
   }
 });
 
-// ===== Optional: direct file-reading API =====
-// You can call this from the frontend later if you want a "Read this file" button.
-app.post("/api/read-file", async (req, res) => {
-  try {
-    const relKey = req.body && req.body.relKey;
-    if (!relKey) {
-      return res.status(400).json({ error: "relKey (S3 key relative to prefix) is required." });
-    }
-
-    const result = await getFileTextWithCache(relKey);
-    if (!result) {
-      return res.status(500).json({ error: "Failed to extract text from file." });
-    }
-
-    res.json({
-      relKey,
-      fromCache: result.fromCache,
-      text: result.text,
-    });
-  } catch (err) {
-    console.error("Error in /api/read-file:", err);
-    res.status(500).json({ error: "Unexpected error in /api/read-file." });
-  }
-});
-
-// ===== Fallback: serve index.html =====
+// ========== Fallback: serve index.html ==========
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// ===== Start server after loading S3 index =====
+// ========== Start server after loading S3 index ==========
 (async () => {
   console.log("=== OHLA GPT STARTUP ===");
   console.log("AWS_REGION:", AWS_REGION);
