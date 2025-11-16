@@ -1,568 +1,314 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
   <head>
     <meta charset="UTF-8" />
     <title>OHLA GPT — I-5 Project Assistant</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      :root {
-        --bg: #050816;
-        --bg-card: #0b1020;
-        --accent: #12b3ff;
-        --accent-soft: rgba(18, 179, 255, 0.14);
-        --border-subtle: rgba(255, 255, 255, 0.06);
-        --text-main: #f9fafb;
-        --text-muted: #9ca3af;
-        --chip-bg: rgba(15, 118, 228, 0.16);
-        --chip-border: rgba(59, 130, 246, 0.25);
-        --shadow-soft: 0 24px 60px rgba(0, 0, 0, 0.9);
-        --radius-xl: 24px;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      html,
-      body {
-        margin: 0;
-        padding: 0;
-        background: radial-gradient(circle at top, #111827 0, #020617 55%, #000 100%);
-        color: var(--text-main);
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
-          "Segoe UI", sans-serif;
-        min-height: 100vh;
-      }
-
-      body {
-        display: flex;
-        justify-content: center;
-        padding: 24px 12px 32px;
-      }
-
-      .app-shell {
-        width: 100%;
-        max-width: 1400px;
-      }
-
-      /* Top header with logo */
-      .top-bar {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        margin-bottom: 16px;
-      }
-
-      .top-bar-logo {
-        height: 40px;
-        width: auto;
-        border-radius: 10px;
-        background: #fff;
-        padding: 4px 10px;
-        box-shadow: 0 10px 25px rgba(15, 23, 42, 0.6);
-      }
-
-      .top-bar-title {
-        font-weight: 600;
-        letter-spacing: 0.02em;
-      }
-
-      .top-bar-subtitle {
-        font-size: 0.8rem;
-        color: var(--text-muted);
-      }
-
-      /* Layout: chat card + info card */
-      .layout {
-        display: grid;
-        grid-template-columns: minmax(0, 2.3fr) minmax(260px, 1.1fr);
-        gap: 20px;
-      }
-
-      @media (max-width: 1024px) {
-        .layout {
-          grid-template-columns: minmax(0, 1fr);
-        }
-      }
-
-      .card {
-        background: radial-gradient(circle at top left, #111827 0, #020617 55%);
-        border-radius: var(--radius-xl);
-        border: 1px solid var(--border-subtle);
-        box-shadow: var(--shadow-soft);
-        padding: 20px 22px;
-        position: relative;
-        overflow: hidden;
-      }
-
-      .card::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: radial-gradient(
-          circle at top right,
-          rgba(56, 189, 248, 0.12),
-          transparent 55%
-        );
-        opacity: 0.7;
-        pointer-events: none;
-      }
-
-      .card-inner {
-        position: relative;
-        z-index: 1;
-      }
-
-      .chat-title {
-        font-size: 1.02rem;
-        font-weight: 600;
-        margin-bottom: 6px;
-      }
-
-      .chat-subtitle {
-        font-size: 0.82rem;
-        color: var(--text-muted);
-        margin-bottom: 16px;
-      }
-
-      .helper-chips {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin-bottom: 10px;
-      }
-
-      .chip {
-        font-size: 0.75rem;
-        padding: 3px 10px;
-        border-radius: 999px;
-        border: 1px solid var(--chip-border);
-        background: var(--chip-bg);
-        color: var(--text-muted);
-      }
-
-      .chat-window {
-        border-radius: 18px;
-        border: 1px solid rgba(148, 163, 184, 0.25);
-        background: linear-gradient(
-          135deg,
-          rgba(15, 23, 42, 0.92),
-          rgba(15, 23, 42, 0.98)
-        );
-        padding: 12px 12px 6px;
-        max-height: 58vh;
-        overflow-y: auto;
-        scrollbar-width: thin;
-      }
-
-      @media (max-height: 750px) {
-        .chat-window {
-          max-height: 52vh;
-        }
-      }
-
-      .message-row {
-        display: flex;
-        margin-bottom: 8px;
-      }
-
-      .message-row.user {
-        justify-content: flex-end;
-      }
-
-      .message-bubble {
-        max-width: 80%;
-        padding: 8px 11px;
-        border-radius: 14px;
-        font-size: 0.82rem;
-        line-height: 1.3;
-      }
-
-      .message-row.user .message-bubble {
-        background: linear-gradient(135deg, #14b8a6, #22c55e);
-        color: #052e16;
-        border-bottom-right-radius: 4px;
-      }
-
-      .message-row.bot .message-bubble {
-        background: rgba(15, 23, 42, 0.9);
-        border: 1px solid rgba(148, 163, 184, 0.3);
-        border-bottom-left-radius: 4px;
-        color: #e5e7eb;
-      }
-
-      .pdf-preview {
-        margin-top: 6px;
-        font-size: 0.78rem;
-      }
-
-      .pdf-preview details {
-        background: rgba(15, 23, 42, 0.9);
-        border-radius: 10px;
-        border: 1px solid rgba(148, 163, 184, 0.4);
-        padding: 6px 8px;
-      }
-
-      .pdf-preview summary {
-        cursor: pointer;
-        color: #7dd3fc;
-      }
-
-      .pdf-preview pre {
-        white-space: pre-wrap;
-        max-height: 220px;
-        overflow-y: auto;
-        margin: 4px 0 0;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-          "Liberation Mono", "Courier New", monospace;
-      }
-
-      .chat-input-area {
-        margin-top: 10px;
-      }
-
-      .chat-input-row {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        margin-bottom: 4px;
-      }
-
-      .text-input {
-        flex: 1;
-        padding: 10px 12px;
-        border-radius: 999px;
-        border: 1px solid rgba(148, 163, 184, 0.6);
-        background: rgba(15, 23, 42, 0.95);
-        color: var(--text-main);
-        font-size: 0.85rem;
-        outline: none;
-      }
-
-      .text-input:focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
-      }
-
-      .send-btn {
-        min-width: 70px;
-        border-radius: 999px;
-        padding: 9px 14px;
-        font-size: 0.86rem;
-        border: none;
-        background: linear-gradient(135deg, #0ea5e9, #22c55e);
-        color: #022c22;
-        font-weight: 600;
-        cursor: pointer;
-        box-shadow: 0 10px 24px rgba(34, 197, 94, 0.3);
-      }
-
-      .send-btn:active {
-        transform: translateY(1px);
-        box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
-      }
-
-      .password-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 4px;
-      }
-
-      .password-row label {
-        font-size: 0.74rem;
-        color: var(--text-muted);
-      }
-
-      .password-row input {
-        flex: 0 0 180px;
-        padding: 6px 9px;
-        border-radius: 999px;
-        border: 1px solid rgba(148, 163, 184, 0.55);
-        background: rgba(15, 23, 42, 0.95);
-        color: var(--text-main);
-        font-size: 0.8rem;
-      }
-
-      .status-line {
-        margin-top: 4px;
-        font-size: 0.75rem;
-        color: var(--text-muted);
-      }
-
-      /* Info / clock card */
-      .info-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-      }
-
-      .info-title {
-        font-size: 0.95rem;
-        font-weight: 600;
-      }
-
-      .clock {
-        background: radial-gradient(circle at top, #020617, #020617);
-        border-radius: 999px;
-        padding: 6px 16px;
-        border: 1px solid rgba(148, 163, 184, 0.45);
-        display: inline-flex;
-        flex-direction: column;
-        align-items: flex-end;
-        min-width: 120px;
-      }
-
-      .clock-time {
-        font-size: 1.5rem; /* ~30% larger than before */
-        font-weight: 600;
-        letter-spacing: 0.07em;
-      }
-
-      .clock-label {
-        font-size: 0.7rem;
-        color: var(--text-muted);
-      }
-
-      .info-body {
-        font-size: 0.8rem;
-        color: var(--text-muted);
-        line-height: 1.45;
-      }
-
-      .info-body ul {
-        padding-left: 1.1rem;
-        margin: 0.3rem 0 0.4rem;
-      }
-
-      .info-body li {
-        margin-bottom: 0.2rem;
-      }
-
-      .info-footer {
-        margin-top: 10px;
-        font-size: 0.72rem;
-        color: var(--text-muted);
-        border-top: 1px solid rgba(148, 163, 184, 0.3);
-        padding-top: 8px;
-      }
-
-      /* Footer credits */
-      .footer {
-        margin-top: 8px;
-        text-align: center;
-        font-size: 0.78rem;
-        color: var(--text-muted);
-      }
-
-      .footer-name {
-        font-weight: 600;
-        font-size: 0.9rem; /* ~15% larger */
-      }
-
-      .footer small {
-        display: block;
-        margin-top: 2px;
-      }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Tailwind via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              ohlaBlue: "#1d4ed8",
+              ohlaDark: "#020617",
+            },
+          },
+        },
+      };
+    </script>
   </head>
-
-  <body>
-    <div class="app-shell">
-      <!-- Top bar with logo outside card -->
-      <div class="top-bar">
-        <img src="logo.png" alt="OHLA Logo" class="top-bar-logo" />
-        <div>
-          <div class="top-bar-title">OHLA GPT — I-5 Project Assistant</div>
-          <div class="top-bar-subtitle">
-            Santa Clarita I-5 North County Enhancement Project
+  <body class="bg-slate-950 text-slate-100 min-h-screen">
+    <div class="min-h-screen flex flex-col items-center py-6 px-4 md:px-8">
+      <!-- Header -->
+      <header class="w-full max-w-6xl flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <!-- Logo on the top-left -->
+          <img
+            src="logo.png"
+            alt="OHLA Logo"
+            class="h-10 w-auto md:h-12"
+          />
+          <div>
+            <div class="flex items-baseline flex-wrap gap-2">
+              <h1 class="text-xl md:text-2xl font-semibold">
+                OHLA GPT — I-5 Project Assistant
+              </h1>
+            </div>
+            <p class="text-sm text-slate-300">
+              Santa Clarita I-5 North County Enhancement Project
+            </p>
+            <!-- Your name at the top (not in footer) -->
+            <p class="mt-1 text-xs md:text-sm text-slate-400">
+              Designed by
+              <span class="font-semibold text-slate-100 text-[1.1em]">
+                Ibrahim Altamimi
+              </span>
+            </p>
           </div>
         </div>
-      </div>
 
-      <div class="layout">
-        <!-- Chat card -->
-        <div class="card">
-          <div class="card-inner">
-            <div class="chat-title">
-              Hello, this is the OHLA I-5 project assistant. How can I help you
-              today?
-            </div>
-            <div class="chat-subtitle">
+        <!-- Clock, enlarged ~30% -->
+        <div
+          class="hidden md:flex flex-col items-end bg-slate-900/70 border border-slate-700/70 rounded-2xl px-5 py-3 shadow-lg shadow-black/40"
+        >
+          <div id="clock" class="font-mono text-3xl lg:text-4xl leading-none">
+            --
+          </div>
+          <div
+            id="clockDate"
+            class="text-xs text-slate-400 mt-1 tracking-wide"
+          >
+            --
+          </div>
+        </div>
+      </header>
+
+      <!-- Main layout -->
+      <main
+        class="w-full max-w-6xl grid gap-6 mt-6 md:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]"
+      >
+        <!-- Chat panel -->
+        <section
+          class="bg-slate-900/70 border border-slate-800 rounded-3xl shadow-2xl shadow-black/40 flex flex-col"
+        >
+          <!-- Intro bar -->
+          <div
+            class="px-5 py-3 border-b border-slate-800/80 text-sm text-slate-300"
+          >
+            <p>
               Ask about the I-5 project files, RFIs, PCOs, permits, specs, or
               submittals.
-            </div>
-
-            <div class="helper-chips">
-              <div class="chip">Examples: "Summarize RFI-140"</div>
-              <div class="chip">"Where is the POTD for 2025-11-01?"</div>
-              <div class="chip">"What does this encroachment permit cover?"</div>
-            </div>
-
-            <div id="chat-window" class="chat-window"></div>
-
-            <div class="chat-input-area">
-              <div class="chat-input-row">
-                <input
-                  id="user-input"
-                  type="text"
-                  class="text-input"
-                  placeholder="Ask about the I-5 project files, RFIs, PCOs, permits, specs, or submittals..."
-                />
-                <button id="send-btn" class="send-btn">Send</button>
-              </div>
-
-              <div class="password-row">
-                <label for="password-input"
-                  >Admin password for financial questions (optional):</label
-                >
-                <input
-                  id="password-input"
-                  type="password"
-                  autocomplete="off"
-                />
-              </div>
-
-              <div id="status-line" class="status-line"></div>
-            </div>
+            </p>
           </div>
-        </div>
 
-        <!-- Info / clock card -->
-        <div class="card">
-          <div class="card-inner">
-            <div class="info-header">
-              <div class="info-title">How this assistant works</div>
-              <div class="clock">
-                <div id="clock-time" class="clock-time">--:--:--</div>
-                <div class="clock-label">Local time</div>
-              </div>
-            </div>
-
-            <div class="info-body">
-              <ul>
-                <li>
-                  Uses OHLA I-5 project documents: permits, POTD, RFIs, PCOs,
-                  subcontractor contracts, project contract submittals, Caltrans
-                  &amp; Metro specs.
-                </li>
-                <li>
-                  First tries to answer from project files. If the answer isn’t
-                  clear, it may fall back to general civil-construction
-                  knowledge.
-                </li>
-                <li>
-                  Some documents are read using AWS Textract. You may see an
-                  “extracted text preview” when a specific file is used.
-                </li>
-                <li>
-                  Financial &amp; cost-related questions require admin
-                  permission and may ask for a password.
-                </li>
-              </ul>
-
-              <div class="info-footer">
-                This assistant is a helper only and does not replace official
-                contract documents. Always verify critical information against
-                signed plans/specs and approved submittals.
+          <!-- Scrollable chat window -->
+          <div
+            id="chatWindow"
+            class="flex-1 px-4 py-4 space-y-3 overflow-y-auto"
+            style="max-height: calc(100vh - 210px);"
+          >
+            <!-- Initial assistant message -->
+            <div class="flex justify-start">
+              <div
+                class="max-w-[80%] rounded-2xl bg-slate-800/80 border border-slate-700 px-4 py-3 text-sm"
+              >
+                <p class="font-semibold mb-1">
+                  Hello, this is the OHLA I-5 project assistant. How can I help
+                  you today?
+                </p>
+                <p class="text-slate-300 text-xs mt-1">
+                  Ask me about OHLA USA I-5 project files, specs, RFIs, PCOs,
+                  subcontractor contracts, permits, or Metro specs.
+                </p>
               </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      <!-- Footer -->
-      <div class="footer">
-        Designed by:
-        <span class="footer-name">Ibrahim Altamimi</span>
-        <small>OHLA USA, Inc. — I-5 Project — California</small>
-      </div>
+          <!-- Input area -->
+          <div
+            class="px-4 pb-4 pt-3 border-t border-slate-800/80 flex flex-col gap-2"
+          >
+            <div class="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+              <span class="px-2 py-1 rounded-full bg-slate-800/80">
+                Examples: “Summarize RFI-140”
+              </span>
+              <span class="px-2 py-1 rounded-full bg-slate-800/80">
+                “Where is the POTD for 2025-11-01?”
+              </span>
+              <span class="px-2 py-1 rounded-full bg-slate-800/80 hidden md:inline">
+                “What does this encroachment permit cover?”
+              </span>
+            </div>
+
+            <div class="flex gap-2 items-center">
+              <input
+                id="userInput"
+                type="text"
+                placeholder="Ask about the I-5 project files, RFIs, PCOs, permits, specs, or submittals..."
+                class="flex-1 rounded-2xl bg-slate-900/90 border border-slate-700/80 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ohlaBlue/60 focus:border-ohlaBlue"
+              />
+              <button
+                id="sendBtn"
+                class="px-4 py-2 rounded-2xl bg-ohlaBlue hover:bg-blue-600 text-sm font-medium shadow-md shadow-blue-900/40 transition-colors"
+              >
+                Send
+              </button>
+            </div>
+
+            <!-- Finance password input -->
+            <div class="flex flex-col md:flex-row md:items-center gap-2 mt-1">
+              <label
+                for="financePassword"
+                class="text-[11px] text-slate-400 md:w-56"
+              >
+                Admin password for financial questions (optional):
+              </label>
+              <input
+                id="financePassword"
+                type="password"
+                class="md:flex-1 rounded-xl bg-slate-900/90 border border-slate-700/80 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ohlaBlue/60 focus:border-ohlaBlue"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- Right info panel -->
+        <aside
+          class="bg-slate-900/60 border border-slate-800 rounded-3xl shadow-xl shadow-black/40 flex flex-col"
+        >
+          <div class="px-5 py-4 border-b border-slate-800/80">
+            <!-- Small clock on mobile -->
+            <div
+              class="md:hidden mb-3 flex flex-col items-start bg-slate-900/70 border border-slate-700/70 rounded-2xl px-4 py-2"
+            >
+              <div
+                id="clockMobile"
+                class="font-mono text-2xl leading-none"
+              >
+                --
+              </div>
+              <div
+                id="clockDateMobile"
+                class="text-[11px] text-slate-400 mt-1 tracking-wide"
+              >
+                --
+              </div>
+            </div>
+
+            <h2 class="text-sm font-semibold mb-2">How this assistant works</h2>
+            <ul class="text-xs space-y-1 text-slate-300">
+              <li>
+                • Uses OHLA I-5 project documents: permits, POTD, RFIs, PCOs,
+                subcontractor contracts, project contract submittals, Caltrans &
+                Metro specs.
+              </li>
+              <li>
+                • First tries to answer from project files. If the answer isn’t
+                clear, it may fall back to general civil-construction knowledge.
+              </li>
+              <li>
+                • Some documents are read using AWS Textract. You may see an
+                <span class="italic">“extracted text preview”</span> when a
+                specific file is used.
+              </li>
+              <li>
+                • Financial & cost-related questions require admin permission
+                and may ask for a password.
+              </li>
+            </ul>
+          </div>
+          <div class="px-5 py-3 text-[10px] text-slate-500 mt-auto border-t border-slate-800/80">
+            This assistant is a helper only and does not replace official
+            contract documents. Always verify critical information against
+            signed plans/specs and approved submittals.
+          </div>
+        </aside>
+      </main>
     </div>
 
     <script>
-      const chatWindow = document.getElementById("chat-window");
-      const userInput = document.getElementById("user-input");
-      const passwordInput = document.getElementById("password-input");
-      const sendBtn = document.getElementById("send-btn");
-      const statusLine = document.getElementById("status-line");
+      // Simple clock
+      function updateClock() {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+        const dateStr = now.toLocaleDateString([], {
+          weekday: "short",
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        });
 
-      function appendMessage(role, text, pdfPreviewData) {
-        const row = document.createElement("div");
-        row.className = "message-row " + role;
+        const clock = document.getElementById("clock");
+        const clockDate = document.getElementById("clockDate");
+        const clockMob = document.getElementById("clockMobile");
+        const clockDateMob = document.getElementById("clockDateMobile");
+
+        if (clock) clock.textContent = timeStr;
+        if (clockDate) clockDate.textContent = dateStr;
+        if (clockMob) clockMob.textContent = timeStr;
+        if (clockDateMob) clockDateMob.textContent = dateStr;
+      }
+      setInterval(updateClock, 1000);
+      updateClock();
+
+      // Chat logic
+      const chatWindow = document.getElementById("chatWindow");
+      const userInput = document.getElementById("userInput");
+      const sendBtn = document.getElementById("sendBtn");
+      const financeInput = document.getElementById("financePassword");
+
+      function addMessage(text, fromUser) {
+        const wrapper = document.createElement("div");
+        wrapper.className = fromUser
+          ? "flex justify-end"
+          : "flex justify-start";
 
         const bubble = document.createElement("div");
-        bubble.className = "message-bubble";
-        bubble.textContent = text;
-
-        row.appendChild(bubble);
-        chatWindow.appendChild(row);
-
-        if (pdfPreviewData && role === "bot" && pdfPreviewData.preview) {
-          const wrap = document.createElement("div");
-          wrap.className = "pdf-preview";
-
-          const details = document.createElement("details");
-          const summary = document.createElement("summary");
-          summary.textContent =
-            "Extracted text preview from " + pdfPreviewData.fileName;
-          const pre = document.createElement("pre");
-          pre.textContent = pdfPreviewData.preview;
-
-          details.appendChild(summary);
-          details.appendChild(pre);
-          wrap.appendChild(details);
-          chatWindow.appendChild(wrap);
+        bubble.className =
+          "max-w-[80%] rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap";
+        if (fromUser) {
+          bubble.classList.add(
+            "bg-ohlaBlue",
+            "text-white",
+            "shadow-md",
+            "shadow-blue-900/40"
+          );
+        } else {
+          bubble.classList.add(
+            "bg-slate-800/80",
+            "border",
+            "border-slate-700",
+            "text-slate-100"
+          );
         }
 
+        bubble.textContent = text;
+        wrapper.appendChild(bubble);
+        chatWindow.appendChild(wrapper);
+
+        // scroll to bottom
         chatWindow.scrollTop = chatWindow.scrollHeight;
       }
 
       async function sendMessage() {
-        const msg = userInput.value.trim();
-        if (!msg) return;
+        const text = userInput.value.trim();
+        if (!text) return;
 
-        appendMessage("user", msg);
+        addMessage(text, true);
         userInput.value = "";
-        statusLine.textContent = "Thinking with OHLA project files…";
+
+        const financePassword = financeInput.value || "";
 
         try {
-          const response = await fetch("/api/chat", {
+          const res = await fetch("/api/chat", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+            },
             body: JSON.stringify({
-              message: msg,
-              financePassword: passwordInput.value || "",
+              message: text,
+              financePassword,
             }),
           });
 
-          const data = await response.json();
+          const data = await res.json();
+          let answer = data.answer || "No response.";
 
-          const pdfInfo =
-            data.pdfPreview && data.pdfFileName
-              ? { preview: data.pdfPreview, fileName: data.pdfFileName }
-              : null;
-
-          appendMessage("bot", data.answer || "(no answer)", pdfInfo);
-
-          if (data.needsPassword) {
-            statusLine.textContent =
-              "Financial question detected. Please enter the admin password and ask again.";
-          } else if (data.pdfNote) {
-            statusLine.textContent = data.pdfNote;
-          } else if (pdfInfo) {
-            statusLine.textContent =
-              "Answer used extracted text from " + data.pdfFileName + ".";
-          } else {
-            statusLine.textContent = "";
-          }
+          // If server attached a Textract note and model didn't already say it,
+          // you could optionally show it. (For now we just rely on model output.)
+          addMessage(answer, false);
         } catch (err) {
           console.error(err);
-          appendMessage(
-            "bot",
-            "Sorry, something went wrong while talking to the server."
+          addMessage(
+            "Sorry, there was an error talking to the project assistant.",
+            false
           );
-          statusLine.textContent = "";
         }
       }
 
@@ -573,18 +319,6 @@
           sendMessage();
         }
       });
-
-      // simple live clock
-      function updateClock() {
-        const el = document.getElementById("clock-time");
-        const now = new Date();
-        const hh = String(now.getHours()).padStart(2, "0");
-        const mm = String(now.getMinutes()).padStart(2, "0");
-        const ss = String(now.getSeconds()).padStart(2, "0");
-        el.textContent = `${hh}:${mm}:${ss}`;
-      }
-      updateClock();
-      setInterval(updateClock, 1000);
     </script>
   </body>
 </html>
