@@ -6,587 +6,794 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
       :root {
-        --bg-main: #050816;            /* slightly lighter than very dark */
-        --bg-card: #071427;
-        --bg-card-soft: #0b1730;
-        --border-subtle: #1c2942;
-        --accent-blue: #30b9ff;        /* light blue for user bubble & accents */
-        --accent-blue-soft: #1a87d9;
-        --accent-teal: #27f3cf;
+        --bg-main: #050b16;
+        --bg-main-softer: #071020;
+        --bg-panel: #0b1729;
+        --bg-panel-soft: #101c32;
+        --accent: #38bdf8;
+        --accent-soft: #0ea5e9;
+        --accent-glow: rgba(56, 189, 248, 0.35);
+        --border-subtle: rgba(148, 163, 184, 0.25);
         --text-main: #e5e7eb;
-        --text-muted: #9ca3af;
-        --text-soft: #6b7280;
-        --danger: #f87171;
-        --shadow-soft: 0 24px 80px rgba(0, 0, 0, 0.6);
-        --radius-xl: 18px;
+        --text-soft: #9ca3af;
+        --bubble-user-1: #38bdf8;
+        --bubble-user-2: #22c55e;
+        --bubble-user-3: #a855f7;
+        --scroll-track: rgba(15, 23, 42, 0.9);
+        --scroll-thumb: rgba(148, 163, 184, 0.7);
       }
 
       * {
         box-sizing: border-box;
       }
 
+      html,
       body {
         margin: 0;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-          sans-serif;
-        background: radial-gradient(circle at top, #101e3c 0, var(--bg-main) 55%);
-        color: var(--text-main);
-        min-height: 100vh;
-        display: flex;
-        align-items: stretch;
-        justify-content: center;
-      }
-
-      .page-shell {
+        padding: 0;
+        height: 100%;
         width: 100%;
-        max-width: 1320px;
-        margin: 24px auto;
-        padding: 0 16px;
-        display: flex;
-        gap: 24px;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+          "Segoe UI", sans-serif;
+        color: var(--text-main);
       }
 
-      /* Left: Conversation column */
-      .chat-column {
-        flex: 0 0 68%;
-        display: flex;
-        flex-direction: column;
-        background: linear-gradient(
-          135deg,
-          rgba(15, 23, 42, 0.96),
-          rgba(12, 18, 33, 0.98)
-        );
-        border-radius: 24px;
-        box-shadow: var(--shadow-soft);
-        border: 1px solid rgba(148, 163, 184, 0.25);
-        overflow: hidden;
+      body {
+        background: radial-gradient(circle at top, #1f2937 0, #020617 55%);
       }
 
-      /* Sticky header */
-      .chat-header {
-        position: sticky;
-        top: 0;
-        z-index: 20;
-        backdrop-filter: blur(20px);
-        background: radial-gradient(
-            circle at top left,
-            rgba(49, 196, 255, 0.25),
-            transparent 55%
-          ),
-          rgba(15, 23, 42, 0.96);
-        padding: 14px 20px 12px;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+      /* Scrollbars */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--scroll-track);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--scroll-thumb);
+        border-radius: 999px;
+      }
+
+      /* ---------- LOGIN SCREEN ---------- */
+
+      #login-screen {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at top, #111827 0, #020617 55%);
+        z-index: 999;
+      }
+
+      .login-card {
+        width: 100%;
+        max-width: 420px;
+        background: radial-gradient(circle at top left, #1f2937 0, #020617 65%);
+        border-radius: 18px;
+        padding: 28px 24px 22px;
+        box-shadow: 0 25px 80px rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(148, 163, 184, 0.3);
+      }
+
+      .login-logo-row {
         display: flex;
         align-items: center;
         gap: 14px;
+        margin-bottom: 18px;
       }
 
-      .chat-header-logo {
-        width: 52px;
-        height: auto;
-      }
-
-      .chat-header-text {
+      .login-logo-box {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        background: radial-gradient(circle at top, #1d4ed8, #020617);
         display: flex;
-        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.4),
+          0 14px 35px rgba(15, 23, 42, 0.9);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
       }
 
-      .chat-header-title {
+      .login-title-main {
         font-size: 0.95rem;
         letter-spacing: 0.09em;
         text-transform: uppercase;
-        color: #c7d2fe;
+        color: #e5e7eb;
       }
 
-      .chat-header-subtitle {
-        font-size: 0.82rem;
-        color: var(--text-soft);
-      }
-
-      .chat-header-designer {
-        margin-top: 3px;
-        font-size: 1.3rem; /* ~30% larger */
-        font-weight: 600;
-        color: #ffffff; /* your name in white */
-      }
-
-      .chat-body {
-        display: flex;
-        flex-direction: column;
-        padding: 14px 18px 12px;
-        height: 640px;
-      }
-
-      .messages {
-        flex: 1;
-        overflow-y: auto;
-        padding-right: 6px;
-        margin-bottom: 12px;
-        scroll-behavior: smooth;
-      }
-
-      .messages::-webkit-scrollbar {
-        width: 6px;
-      }
-      .messages::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      .messages::-webkit-scrollbar-thumb {
-        background: #273549;
-        border-radius: 999px;
-      }
-
-      .message-row {
-        display: flex;
-        margin-bottom: 10px;
-      }
-
-      .message-row.user {
-        justify-content: flex-end;
-      }
-
-      .message-row.assistant {
-        justify-content: flex-start;
-      }
-
-      .bubble {
-        max-width: 78%;
-        padding: 9px 12px;
-        border-radius: 14px;
-        font-size: 0.88rem;
-        line-height: 1.45;
-        border: 1px solid transparent;
-      }
-
-      /* USER: light blue instead of RGB */
-      .bubble.user {
-        background: radial-gradient(
-          circle at top left,
-          rgba(106, 212, 255, 0.9),
-          rgba(39, 148, 255, 0.9)
-        );
-        color: #02101f;
-        border-color: rgba(191, 219, 254, 0.8);
-        box-shadow: 0 12px 30px rgba(37, 99, 235, 0.35);
-      }
-
-      /* ASSISTANT */
-      .bubble.assistant {
-        background: linear-gradient(
-          145deg,
-          rgba(15, 23, 42, 0.96),
-          rgba(12, 20, 38, 0.98)
-        );
-        border-color: rgba(148, 163, 184, 0.5);
-        box-shadow: 0 16px 45px rgba(15, 23, 42, 0.9);
-      }
-
-      .bubble.assistant .meta {
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        color: var(--accent-blue);
-        margin-bottom: 4px;
-      }
-
-      .system-note {
-        font-size: 0.78rem;
-        color: var(--text-soft);
-        margin-top: 6px;
-      }
-
-      .text-muted {
-        color: var(--text-muted);
-      }
-
-      .chat-input-panel {
-        border-top: 1px solid rgba(148, 163, 184, 0.32);
-        padding-top: 10px;
-        margin-top: 4px;
-      }
-
-      .input-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 8px;
-      }
-
-      .input-row textarea {
-        flex: 1;
-        resize: none;
-        min-height: 42px;
-        max-height: 90px;
-        padding: 9px 11px;
-        border-radius: 999px;
-        border: 1px solid rgba(148, 163, 184, 0.5);
-        background: rgba(15, 23, 42, 0.96);
-        color: var(--text-main);
-        font-size: 0.9rem;
-        outline: none;
-      }
-
-      .input-row textarea::placeholder {
-        color: var(--text-soft);
-      }
-
-      .primary-btn {
-        border: none;
-        border-radius: 999px;
-        font-size: 0.9rem;
-        padding: 10px 18px;
-        background: radial-gradient(circle at top, var(--accent-blue), var(--accent-blue-soft));
-        color: #02101f;
-        font-weight: 600;
-        cursor: pointer;
-        box-shadow: 0 16px 35px rgba(56, 189, 248, 0.45);
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .primary-btn:disabled {
-        opacity: 0.55;
-        cursor: default;
-        box-shadow: none;
-      }
-
-      .secondary-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 0.78rem;
-        color: var(--text-soft);
-      }
-
-      .secondary-row input {
-        border-radius: 999px;
-        border: 1px dashed rgba(148, 163, 184, 0.6);
-        background: rgba(15, 23, 42, 0.96);
-        padding: 6px 9px;
-        font-size: 0.8rem;
-        color: var(--text-main);
-        outline: none;
-      }
-
-      .status-line {
-        margin-top: 4px;
-        font-size: 0.78rem;
-        color: var(--text-soft);
-        min-height: 16px;
-      }
-
-      .status-error {
-        color: var(--danger);
-      }
-
-      /* Right column */
-      .info-column {
-        flex: 0 0 32%;
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-      }
-
-      .card {
-        background: radial-gradient(circle at top, #102345, #050b1a);
-        border-radius: 22px;
-        padding: 16px 18px;
-        box-shadow: var(--shadow-soft);
-        border: 1px solid rgba(148, 163, 184, 0.35);
-      }
-
-      .clock-card {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-      }
-
-      .clock-time {
-        font-size: 1.9rem;
-        letter-spacing: 0.08em;
-        font-weight: 600;
-      }
-
-      .clock-date {
+      .login-title-sub {
         font-size: 0.8rem;
         color: var(--text-soft);
         margin-top: 2px;
       }
 
-      .info-title {
-        font-size: 0.9rem;
-        text-transform: uppercase;
-        letter-spacing: 0.14em;
-        color: #c7d2fe;
-        margin-bottom: 8px;
-      }
-
-      .info-list {
+      .login-label {
         font-size: 0.8rem;
-        color: var(--text-muted);
-        padding-left: 18px;
-        margin: 8px 0 0;
+        color: var(--text-soft);
+        margin-bottom: 6px;
       }
 
-      .info-list li {
+      .login-input-row {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .login-input {
+        flex: 1;
+        padding: 9px 11px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        background: rgba(15, 23, 42, 0.9);
+        color: var(--text-main);
+        font-size: 0.9rem;
+        outline: none;
+      }
+
+      .login-input:focus {
+        border-color: var(--accent-soft);
+        box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
+      }
+
+      .login-button {
+        padding: 8px 16px;
+        border-radius: 999px;
+        border: none;
+        cursor: pointer;
+        background: radial-gradient(circle at top left, #38bdf8, #0f766e);
+        color: #0b1220;
+        font-weight: 600;
+        font-size: 0.9rem;
+        box-shadow: 0 12px 30px rgba(8, 47, 73, 0.7);
+      }
+
+      .login-button:active {
+        transform: translateY(1px);
+      }
+
+      .login-error {
+        min-height: 18px;
+        margin-top: 8px;
+        font-size: 0.78rem;
+        color: #fca5a5;
+      }
+
+      .login-hint {
+        margin-top: 14px;
+        font-size: 0.75rem;
+        color: var(--text-soft);
+        line-height: 1.5;
+      }
+
+      /* ---------- APP LAYOUT ---------- */
+
+      #app {
+        display: none;
+        min-height: 100vh;
+        padding: 16px;
+      }
+
+      .app-shell {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        gap: 18px;
+      }
+
+      @media (max-width: 900px) {
+        .app-shell {
+          flex-direction: column;
+        }
+      }
+
+      .chat-column {
+        flex: 1.7;
+        background: linear-gradient(145deg, #020617 0, #020617 35%, #020617 100%);
+        border-radius: 22px;
+        border: 1px solid rgba(148, 163, 184, 0.32);
+        box-shadow: 0 28px 90px rgba(15, 23, 42, 0.95);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .sidebar-column {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      /* Header (sticky inside card) */
+      .chat-header {
+        padding: 14px 20px 10px;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.9);
+        background: radial-gradient(circle at top left, #020617, #020617);
+        position: sticky;
+        top: 0;
+        z-index: 2;
+      }
+
+      .header-row-1 {
+        display: flex;
+        align-items: center;
+        gap: 10px;
         margin-bottom: 4px;
       }
 
-      .info-footer {
+      .ohla-pill {
+        background: linear-gradient(135deg, #020617, #020617);
+        border-radius: 999px;
+        padding: 4px 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+      }
+
+      .ohla-pill img {
+        height: 18px;
+      }
+
+      .ohla-pill-text {
+        font-size: 0.78rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--text-soft);
+      }
+
+      .header-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #e5e7eb;
+      }
+
+      .header-subtitle {
+        font-size: 0.78rem;
+        color: var(--text-soft);
+      }
+
+      .header-designed {
+        margin-top: 4px;
+        font-size: 0.78rem;
+      }
+
+      .header-designed span.label {
+        color: var(--accent-soft);
+        font-weight: 500;
+      }
+
+      .header-designed span.name {
+        color: #f9fafb;
+        font-weight: 600;
+      }
+
+      .prompt-example-row {
         margin-top: 8px;
         font-size: 0.75rem;
         color: var(--text-soft);
       }
 
-      .tech-logo-card {
-        text-align: center;
-        padding-top: 10px;
+      /* Messages */
+
+      .chat-body {
+        padding: 14px 18px 10px;
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 210px);
+        max-height: 720px;
       }
 
-      .tech-logo-card img {
-        width: 80%;
-        max-width: 260px;
-        border-radius: 24px;
-        display: inline-block;
-        filter: drop-shadow(0 18px 42px rgba(15, 23, 42, 0.9));
+      @media (max-width: 900px) {
+        .chat-body {
+          height: calc(100vh - 240px);
+        }
       }
 
-      .tech-logo-caption {
-        margin-top: 6px;
-        font-size: 0.78rem;
+      .messages-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding-right: 6px;
+      }
+
+      .msg-row {
+        margin-bottom: 10px;
+        display: flex;
+      }
+
+      .msg-row.user {
+        justify-content: flex-end;
+      }
+
+      .msg-bubble {
+        max-width: 90%;
+        border-radius: 18px;
+        padding: 9px 12px;
+        font-size: 0.86rem;
+        line-height: 1.5;
+      }
+
+      .msg-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        margin-bottom: 4px;
+        opacity: 0.8;
+      }
+
+      .msg-bubble.assistant {
+        background: rgba(15, 23, 42, 0.96);
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.85);
+      }
+
+      .msg-bubble.user {
+        background: linear-gradient(
+          135deg,
+          var(--bubble-user-1),
+          var(--bubble-user-2),
+          var(--bubble-user-3)
+        );
+        color: #0f172a;
+        font-weight: 500;
+        box-shadow: 0 18px 40px rgba(8, 47, 73, 0.9);
+      }
+
+      /* Input row */
+
+      .input-panel {
+        margin-top: 8px;
+        border-radius: 16px;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        background: radial-gradient(circle at top left, #020617, #020617);
+        padding: 8px 10px 8px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .input-row-main {
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+      }
+
+      .chat-input {
+        flex: 1;
+        min-height: 42px;
+        max-height: 80px;
+        resize: none;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background: rgba(15, 23, 42, 0.9);
+        color: var(--text-main);
+        font-size: 0.86rem;
+        padding: 8px 10px;
+        outline: none;
+      }
+
+      .chat-input:focus {
+        border-color: var(--accent-soft);
+        box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
+      }
+
+      .send-button {
+        border-radius: 999px;
+        border: none;
+        padding: 9px 18px;
+        font-size: 0.88rem;
+        font-weight: 600;
+        background: radial-gradient(circle at top left, var(--accent-soft), #0f766e);
+        color: #020617;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        box-shadow: 0 16px 40px rgba(8, 47, 73, 0.85);
+      }
+
+      .send-button:active {
+        transform: translateY(1px);
+      }
+
+      .input-row-password {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.75rem;
         color: var(--text-soft);
       }
 
-      @media (max-width: 1024px) {
-        .page-shell {
-          flex-direction: column;
-        }
-        .chat-column,
-        .info-column {
-          flex: 1 1 auto;
-        }
+      .password-input {
+        width: 150px;
+        border-radius: 999px;
+        border: 1px dashed rgba(148, 163, 184, 0.5);
+        background: rgba(15, 23, 42, 0.9);
+        color: var(--text-main);
+        font-size: 0.8rem;
+        padding: 4px 9px;
+        outline: none;
       }
 
-      @media (max-width: 720px) {
-        .chat-header {
-          flex-direction: row;
-          align-items: flex-start;
-        }
-        .chat-header-logo {
-          width: 44px;
-        }
-        .chat-header-designer {
-          font-size: 1.1rem;
-        }
-        .chat-body {
-          height: 560px;
-        }
+      /* ---------- SIDEBAR ---------- */
+
+      .tech-logo-card {
+        background: radial-gradient(circle at top left, #020617, #020617 55%, #020617);
+        border-radius: 22px;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        padding: 16px 16px 12px;
+        box-shadow: 0 24px 80px rgba(15, 23, 42, 0.9);
+      }
+
+      .tech-logo-card img {
+        width: 100%;
+        border-radius: 18px;
+        display: block;
+      }
+
+      .tech-logo-caption {
+        margin-top: 8px;
+        font-size: 0.75rem;
+        color: var(--text-soft);
+        text-align: center;
+      }
+
+      .how-card {
+        flex: 1;
+        background: radial-gradient(circle at top left, #020617, #020617 55%, #020617);
+        border-radius: 22px;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        padding: 14px 16px 12px;
+        box-shadow: 0 24px 80px rgba(15, 23, 42, 0.9);
+        font-size: 0.82rem;
+      }
+
+      .how-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: #e5e7eb;
+        margin-bottom: 8px;
+      }
+
+      .how-list {
+        padding-left: 16px;
+        color: var(--text-soft);
+      }
+
+      .how-list li {
+        margin-bottom: 5px;
+      }
+
+      .how-footer {
+        margin-top: 8px;
+        border-top: 1px solid rgba(51, 65, 85, 0.8);
+        padding-top: 6px;
+        font-size: 0.7rem;
+        color: var(--text-soft);
+      }
+
+      .clock-card {
+        background: radial-gradient(circle at top left, #020617, #020617 60%, #020617);
+        border-radius: 22px;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        padding: 10px 16px;
+        margin-bottom: 10px;
+        box-shadow: 0 24px 80px rgba(15, 23, 42, 0.9);
+      }
+
+      .clock-time {
+        font-family: "SF Mono", ui-monospace, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        font-size: 1.4rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-align: center;
+      }
+
+      .clock-date {
+        margin-top: 2px;
+        font-size: 0.78rem;
+        color: var(--text-soft);
+        text-align: center;
       }
     </style>
   </head>
   <body>
-    <div class="page-shell">
-      <!-- LEFT: Chat column -->
-      <div class="chat-column">
-        <div class="chat-header">
-          <img
-            src="logo.png"
-            alt="OHLA USA logo"
-            class="chat-header-logo"
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen">
+      <div class="login-card">
+        <div class="login-logo-row">
+          <div class="login-logo-box">OHLA</div>
+          <div>
+            <div class="login-title-main">OHLA GPT</div>
+            <div class="login-title-sub">
+              I-5 Project Assistant — Santa Clarita, CA
+            </div>
+          </div>
+        </div>
+        <div class="login-label">Enter site password to access the assistant</div>
+        <div class="login-input-row">
+          <input
+            id="site-password-input"
+            type="password"
+            class="login-input"
+            placeholder="Site password"
           />
-          <div class="chat-header-text">
-            <div class="chat-header-title">OHLA GPT — I-5 Project Assistant</div>
-            <div class="chat-header-subtitle">
-              Santa Clarita I-5 North County Enhancement Project
-            </div>
-            <div class="chat-header-designer">
-              Designed by Ibrahim Altamimi
-            </div>
-          </div>
+          <button id="site-password-button" class="login-button">
+            Unlock
+          </button>
         </div>
-
-        <div class="chat-body">
-          <div id="messages" class="messages"></div>
-
-          <form id="chat-form" class="chat-input-panel">
-            <div class="input-row">
-              <textarea
-                id="user-input"
-                placeholder="Ask about I-5 project files, RFIs, POTDs, permits, specs, or submittals..."
-              ></textarea>
-              <button type="submit" id="send-btn" class="primary-btn">
-                Send
-              </button>
-            </div>
-            <div class="secondary-row">
-              <span>Admin password for financial questions (optional):</span>
-              <input
-                id="finance-password"
-                type="password"
-                autocomplete="off"
-                placeholder="••••••"
-              />
-            </div>
-            <div id="status" class="status-line"></div>
-          </form>
-        </div>
-      </div>
-
-      <!-- RIGHT: Clock & how-it-works & logo -->
-      <div class="info-column">
-        <div class="card clock-card">
-          <div id="clock-time" class="clock-time">--:--:--</div>
-          <div id="clock-date" class="clock-date"></div>
-        </div>
-
-        <div class="card">
-          <div class="info-title">How this assistant works</div>
-          <ul class="info-list">
-            <li>
-              Uses OHLA I-5 project documents: POTDs, permits, RFIs, PCOs,
-              subcontractor contracts, project contract submittals, and Caltrans /
-              Metro specs stored in a secure AWS S3 bucket.
-            </li>
-            <li>
-              First tries to answer from project files and summaries. If the
-              answer isn’t clear, it may fall back to general civil-construction
-              knowledge.
-            </li>
-            <li>
-              Some documents are read using OpenAI Vision. You may see an
-              “extracted text preview” when a specific file is used.
-            </li>
-            <li>
-              Financial &amp; cost-related questions require admin permission and
-              may ask for a password.
-            </li>
-          </ul>
-          <div class="info-footer">
-            This assistant is a helper only and does not replace official contract
-            documents. Always verify critical information against signed plans,
-            specs, and approved submittals.
-          </div>
-        </div>
-
-        <div class="card tech-logo-card">
-          <img
-            src="ohla-tech-logo.png"
-            alt="OHLA USA Tech Logo"
-          />
-          <div class="tech-logo-caption">
-            OHLA USA — AI-enhanced project assistant for the I-5 North County
-            Enhancement Project.
-          </div>
+        <div id="site-password-error" class="login-error"></div>
+        <div class="login-hint">
+          This simple lock is only to keep the site private. For sensitive
+          contract information, always verify against official signed
+          documents.
         </div>
       </div>
     </div>
 
+    <!-- APP -->
+    <div id="app">
+      <div class="app-shell">
+        <!-- CHAT COLUMN -->
+        <section class="chat-column">
+          <header class="chat-header">
+            <div class="header-row-1">
+              <div class="ohla-pill">
+                <img src="logo.png" alt="OHLA USA" />
+                <span class="ohla-pill-text">Ohla gpt — i-5 assistant</span>
+              </div>
+            </div>
+            <div class="header-title">
+              OHLA GPT — I-5 Project Assistant
+            </div>
+            <div class="header-subtitle">
+              Santa Clarita I-5 North County Enhancement Project
+            </div>
+            <div class="header-designed">
+              <span class="label">Designed by</span>
+              &nbsp;<span class="name">Ibrahim Altamimi</span>
+            </div>
+            <div class="prompt-example-row">
+              Ask about the I-5 project files, RFIs, PCOs, permits, specs, or
+              submittals…
+            </div>
+          </header>
+
+          <div class="chat-body">
+            <div id="messages" class="messages-scroll">
+              <div class="msg-row assistant">
+                <div class="msg-bubble assistant">
+                  <div class="msg-label">Assistant</div>
+                  <div>
+                    Hello, this is the OHLA I-5 project assistant. How can I
+                    help you today? Ask me about OHLA USA I-5 project files,
+                    specs, RFIs, PCOs, permits, submittals, or Metro/Caltrans
+                    requirements.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="input-panel">
+              <div class="input-row-main">
+                <textarea
+                  id="user-input"
+                  class="chat-input"
+                  placeholder="Ask about the I-5 project files, RFIs, PCOs, permits, specs, or submittals..."
+                  rows="1"
+                ></textarea>
+                <button id="send-btn" class="send-button">
+                  Enter
+                </button>
+              </div>
+              <div class="input-row-password">
+                <span>Admin password for financial questions (optional):</span>
+                <input
+                  id="finance-password"
+                  type="password"
+                  class="password-input"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar-column">
+          <div class="clock-card">
+            <div id="clock-time" class="clock-time">00:00:00 PM</div>
+            <div id="clock-date" class="clock-date">Loading…</div>
+          </div>
+
+          <div class="tech-logo-card">
+            <img
+              src="ohla-tech-logo.png"
+              alt="OHLA USA Tech Logo"
+            />
+            <div class="tech-logo-caption">
+              OHLA USA — AI-enhanced project assistant for the I-5 North County
+              Enhancement Project.
+            </div>
+          </div>
+
+          <div class="how-card">
+            <div class="how-title">How this assistant works</div>
+            <ul class="how-list">
+              <li>
+                Uses OHLA I-5 project documents: POTDs, permits, RFIs, PCOs,
+                subcontractor contracts, project contract submittals, and
+                Caltrans / Metro specs stored in project files.
+              </li>
+              <li>
+                First tries to answer from project files and summaries. If the
+                answer isn’t clear, it may fall back to general
+                civil-construction knowledge.
+              </li>
+              <li>
+                The AI model is still under construction and some answers could
+                be worng.
+              </li>
+              <li>
+                Financial &amp; cost-related questions require admin permission
+                and may ask for a password.
+              </li>
+            </ul>
+            <div class="how-footer">
+              This assistant is a helper only and does not replace official
+              contract documents. Always verify critical information against
+              signed plans/specs and approved submittals.
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
     <script>
-      const messagesEl = document.getElementById("messages");
-      const formEl = document.getElementById("chat-form");
-      const inputEl = document.getElementById("user-input");
-      const financeEl = document.getElementById("finance-password");
-      const statusEl = document.getElementById("status");
-      const sendBtn = document.getElementById("send-btn");
+      // ---------- SIMPLE SITE PASSWORD ----------
+      const SITE_PASSWORD = "ohlausa6677";
 
-      function appendMessage(text, who, meta) {
-        const row = document.createElement("div");
-        row.className = "message-row " + who;
+      const loginScreen = document.getElementById("login-screen");
+      const app = document.getElementById("app");
+      const loginInput = document.getElementById("site-password-input");
+      const loginButton = document.getElementById("site-password-button");
+      const loginError = document.getElementById("site-password-error");
 
-        const bubble = document.createElement("div");
-        bubble.className = "bubble " + who;
-
-        if (who === "assistant" && meta) {
-          const metaEl = document.createElement("div");
-          metaEl.className = "meta";
-          metaEl.textContent = meta;
-          bubble.appendChild(metaEl);
+      function unlockSite() {
+        if (loginInput.value === SITE_PASSWORD) {
+          loginError.textContent = "";
+          loginScreen.style.display = "none";
+          app.style.display = "block";
+          document.getElementById("user-input").focus();
+        } else {
+          loginError.textContent = "Incorrect password. Please try again.";
         }
-
-        const bodyEl = document.createElement("div");
-        bodyEl.innerText = text;
-        bubble.appendChild(bodyEl);
-
-        row.appendChild(bubble);
-        messagesEl.appendChild(row);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
-      async function sendChat(message, financePassword) {
-        const payload = {
-          message,
-          financePassword,
-        };
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) throw new Error("Server error: " + res.status);
-        return res.json();
-      }
+      loginButton.addEventListener("click", unlockSite);
 
-      formEl.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const text = inputEl.value.trim();
-        if (!text) return;
-
-        appendMessage(text, "user");
-        inputEl.value = "";
-        statusEl.textContent = "Thinking...";
-        statusEl.classList.remove("status-error");
-        sendBtn.disabled = true;
-
-        try {
-          const resp = await sendChat(text, financeEl.value || "");
-          appendMessage(
-            resp.answer || "(No response)",
-            "assistant",
-            resp.matchedFileName ? "From: " + resp.matchedFileName : "Assistant"
-          );
-          if (resp.ocrNote) {
-            appendMessage(resp.ocrNote, "assistant");
-          }
-          statusEl.textContent = "";
-        } catch (err) {
-          console.error(err);
-          statusEl.textContent =
-            "Error contacting server. Please try again in a moment.";
-          statusEl.classList.add("status-error");
-        } finally {
-          sendBtn.disabled = false;
-          inputEl.focus();
+      loginInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          unlockSite();
         }
       });
 
-      // Simple welcome message
-      appendMessage(
-        "Hello, this is the OHLA I-5 project assistant. How can I help you today?\n\nAsk about I-5 project files, RFIs, POTDs, permits, specs, or submittals.",
-        "assistant",
-        "System"
-      );
-
-      // Clock
+      // ---------- CLOCK ----------
       function updateClock() {
         const now = new Date();
-        const timeStr = now.toLocaleTimeString(undefined, {
-          hour12: true,
+        const timeEl = document.getElementById("clock-time");
+        const dateEl = document.getElementById("clock-date");
+
+        const timeStr = now.toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
         });
-        const dateStr = now.toLocaleDateString(undefined, {
+
+        const dateStr = now.toLocaleDateString([], {
           weekday: "short",
           month: "short",
           day: "numeric",
           year: "numeric",
         });
-        document.getElementById("clock-time").textContent = timeStr;
-        document.getElementById("clock-date").textContent = dateStr;
+
+        timeEl.textContent = timeStr;
+        dateEl.textContent = dateStr;
       }
+
       updateClock();
       setInterval(updateClock, 1000);
+
+      // ---------- CHAT CLIENT ----------
+      const messagesEl = document.getElementById("messages");
+      const userInputEl = document.getElementById("user-input");
+      const sendBtnEl = document.getElementById("send-btn");
+      const financePasswordEl = document.getElementById("finance-password");
+
+      function appendMessage(role, text) {
+        const row = document.createElement("div");
+        row.className = "msg-row " + role;
+
+        const bubble = document.createElement("div");
+        bubble.className = "msg-bubble " + role;
+
+        const label = document.createElement("div");
+        label.className = "msg-label";
+        label.textContent = role === "user" ? "You" : "Assistant";
+
+        const body = document.createElement("div");
+        body.innerHTML = text
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\n/g, "<br>");
+
+        bubble.appendChild(label);
+        bubble.appendChild(body);
+        row.appendChild(bubble);
+        messagesEl.appendChild(row);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      async function sendMessage() {
+        const text = userInputEl.value.trim();
+        if (!text) return;
+
+        appendMessage("user", text);
+        userInputEl.value = "";
+        userInputEl.style.height = "auto";
+
+        const financePassword = financePasswordEl.value || "";
+
+        try {
+          const res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message: text,
+              financePassword,
+            }),
+          });
+
+          if (!res.ok) {
+            throw new Error("Network error");
+          }
+
+          const data = await res.json();
+          appendMessage("assistant", data.answer || "[No answer provided]");
+        } catch (err) {
+          console.error(err);
+          appendMessage(
+            "assistant",
+            "Sorry, something went wrong while contacting the server."
+          );
+        }
+      }
+
+      sendBtnEl.addEventListener("click", sendMessage);
+
+      // Enter = send, Shift+Enter = new line
+      userInputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+
+      // Auto-grow textarea
+      userInputEl.addEventListener("input", () => {
+        userInputEl.style.height = "auto";
+        userInputEl.style.height = userInputEl.scrollHeight + "px";
+      });
     </script>
   </body>
 </html>
