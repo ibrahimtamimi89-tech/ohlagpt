@@ -1,799 +1,1098 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>OHLA GPT — I-5 Project Assistant</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <style>
-      :root {
-        --bg-main: #050b16;
-        --bg-main-softer: #071020;
-        --bg-panel: #0b1729;
-        --bg-panel-soft: #101c32;
-        --accent: #38bdf8;
-        --accent-soft: #0ea5e9;
-        --accent-glow: rgba(56, 189, 248, 0.35);
-        --border-subtle: rgba(148, 163, 184, 0.25);
-        --text-main: #e5e7eb;
-        --text-soft: #9ca3af;
-        --bubble-user-1: #38bdf8;
-        --bubble-user-2: #22c55e;
-        --bubble-user-3: #a855f7;
-        --scroll-track: rgba(15, 23, 42, 0.9);
-        --scroll-thumb: rgba(148, 163, 184, 0.7);
-      }
+<head>
+  <meta charset="UTF-8" />
+  <title>OHLA GPT — I-5 Project Assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --bg-main: #070f20;           /* slightly lighter than before */
+      --bg-elevated: #0b152b;
+      --bg-elevated-soft: #0f1b33;
+      --border-soft: rgba(255, 255, 255, 0.06);
+      --border-strong: rgba(0, 0, 0, 0.65);
+      --text-main: #f5f7ff;
+      --text-muted: #a7b3d9;
+      --accent-blue: #1b7bff;
+      --accent-cyan: #21e6ff;
+      --accent-blue-deep: #0050c8;
+      --accent-glow: rgba(33, 230, 255, 0.5);
+      --danger: #ff5d7a;
+      --scrollbar-track: rgba(255, 255, 255, 0.03);
+      --scrollbar-thumb: rgba(87, 116, 196, 0.6);
+      --radius-lg: 24px;
+      --radius-md: 18px;
+      --radius-pill: 999px;
+      --shadow-soft: 0 18px 35px rgba(0, 0, 0, 0.55);
+      --shadow-card: 0 14px 30px rgba(0, 0, 0, 0.7);
+      --input-bg: rgba(5, 12, 30, 0.95);
+    }
 
-      * {
-        box-sizing: border-box;
-      }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-      html,
+    html,
+    body {
+      height: 100%;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #101a36 0, var(--bg-main) 55%);
+      color: var(--text-main);
+      overflow-y: auto;
+    }
+
+    body {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      padding: 24px 12px 32px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* LOGIN SCREEN */
+
+    #login-screen {
+      width: 100%;
+      max-width: 420px;
+      margin: auto;
+      background: radial-gradient(circle at top left, #132244 0, #050910 55%);
+      border-radius: 32px;
+      padding: 32px 28px 28px;
+      box-shadow: var(--shadow-card);
+      border: 1px solid var(--border-soft);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #login-screen::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: radial-gradient(
+          circle at 0 0,
+          rgba(33, 230, 255, 0.18),
+          transparent 55%
+        ),
+        radial-gradient(
+          circle at 100% 0,
+          rgba(27, 123, 255, 0.18),
+          transparent 55%
+        );
+      opacity: 0.8;
+      pointer-events: none;
+    }
+
+    #login-screen-inner {
+      position: relative;
+      z-index: 1;
+    }
+
+    .login-logo-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .login-logo-row img {
+      height: 40px;
+      filter: drop-shadow(0 0 10px rgba(33, 230, 255, 0.3));
+    }
+
+    .login-title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent-cyan);
+    }
+
+    .login-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .login-panel {
+      margin-top: 22px;
+      background: rgba(4, 10, 24, 0.9);
+      border-radius: 20px;
+      border: 1px solid var(--border-soft);
+      padding: 18px 18px 16px;
+      backdrop-filter: blur(18px);
+    }
+
+    .login-panel h2 {
+      font-size: 15px;
+      color: #f8fbff;
+      margin-bottom: 8px;
+    }
+
+    .login-panel p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .login-form {
+      margin-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .login-label {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .login-input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border-soft);
+      background: var(--input-bg);
+      color: var(--text-main);
+      font-size: 14px;
+      outline: none;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.5);
+    }
+
+    .login-input:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 1px var(--accent-cyan),
+        0 0 24px rgba(33, 230, 255, 0.3);
+    }
+
+    .login-button {
+      margin-top: 4px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      background: linear-gradient(
+        135deg,
+        var(--accent-cyan),
+        var(--accent-blue)
+      );
+      color: #020512;
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), var(--shadow-soft);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .login-button:hover {
+      filter: brightness(1.05);
+      transform: translateY(-0.5px);
+    }
+
+    .login-error {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--danger);
+      min-height: 16px;
+    }
+
+    .login-footnote {
+      margin-top: 14px;
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: center;
+      opacity: 0.85;
+    }
+
+    /* APP LAYOUT */
+
+    .app-shell {
+      width: 100%;
+      max-width: 1420px;
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+    }
+
+    .app-shell > * {
+      min-width: 0;
+    }
+
+    .chat-column {
+      flex: 1.75; /* wider chat area */
+      background: radial-gradient(
+        circle at top left,
+        rgba(33, 230, 255, 0.08),
+        transparent 55%
+      );
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-soft);
+      box-shadow: var(--shadow-card);
+      padding: 18px 20px 16px;
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - 40px);
+      backdrop-filter: blur(22px);
+    }
+
+    .sidebar-column {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-height: calc(100vh - 40px);
+    }
+
+    /* HEADER INSIDE CHAT */
+
+    .chat-header {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      padding-bottom: 10px;
+      margin-bottom: 10px;
+      background: linear-gradient(
+        to bottom,
+        rgba(7, 15, 32, 0.96),
+        rgba(7, 15, 32, 0.85),
+        transparent
+      );
+      backdrop-filter: blur(18px);
+      border-radius: 20px 20px 12px 12px;
+    }
+
+    .header-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 8px;
+    }
+
+    .logo-badge {
+      height: 40px;
+      padding: 8px 12px;
+      border-radius: 14px;
+      background: radial-gradient(
+        circle at top left,
+        rgba(33, 230, 255, 0.35),
+        rgba(5, 10, 26, 0.95)
+      );
+      border: 1px solid rgba(76, 200, 255, 0.6);
+      box-shadow: 0 0 22px rgba(33, 230, 255, 0.4);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-badge img {
+      height: 24px;
+      display: block;
+    }
+
+    .title-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .app-title {
+      font-size: 16px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    .app-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .designed-by {
+      margin-top: 2px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      display: flex;
+      gap: 4px;
+      align-items: baseline;
+    }
+
+    .designed-by-label {
+      color: var(--accent-blue);
+      font-weight: 500;
+      font-size: 11px;
+    }
+
+    .designed-by-name {
+      color: #ffffff;
+      font-weight: 600;
+      font-size: 12.1px; /* ~10% larger than 11px label */
+    }
+
+    .chat-header-divider {
+      margin-top: 6px;
+      height: 1px;
+      background: linear-gradient(
+        90deg,
+        rgba(33, 230, 255, 0.3),
+        rgba(27, 123, 255, 0.2),
+        transparent
+      );
+      border-radius: 999px;
+    }
+
+    /* CLOCK PANEL */
+
+    .clock-panel {
+      width: 100%;
+      padding: 14px 18px 10px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-soft);
+      background: radial-gradient(
+        circle at top,
+        rgba(33, 230, 255, 0.12),
+        rgba(3, 8, 22, 0.96)
+      );
+      box-shadow: var(--shadow-soft);
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+
+    .clock-time {
+      font-size: 24px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: #f8fbff;
+      text-shadow: 0 0 18px rgba(33, 230, 255, 0.7);
+    }
+
+    .clock-date {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* TECHY LOGO CARD (RIGHT COLUMN TOP) */
+
+    .logo-card {
+      background: radial-gradient(
+        circle at top left,
+        rgba(33, 230, 255, 0.18),
+        rgba(4, 8, 20, 0.98)
+      );
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-soft);
+      padding: 12px 14px 16px;
+      box-shadow: var(--shadow-card);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .logo-card-inner {
+      border-radius: 18px;
+      padding: 14px;
+      background: radial-gradient(
+        circle at 15% 0,
+        rgba(33, 230, 255, 0.35),
+        rgba(3, 7, 18, 1)
+      );
+      border: 1px solid rgba(40, 180, 255, 0.6);
+      box-shadow: 0 0 30px rgba(33, 230, 255, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-card-inner img {
+      width: 100%;
+      max-width: 260px;
+      display: block;
+    }
+
+    .logo-card-caption {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      text-align: left;
+    }
+
+    /* "HOW THIS ASSISTANT WORKS" CARD (RIGHT COLUMN BOTTOM) */
+
+    .info-card {
+      flex: 1;
+      background: rgba(7, 15, 32, 0.96);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-soft);
+      padding: 14px 18px;
+      box-shadow: var(--shadow-soft);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .info-title {
+      font-size: 13px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    .info-list {
+      margin-top: 2px;
+      padding-left: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    .info-list li {
+      margin-bottom: 4px;
+    }
+
+    .info-footnote {
+      margin-top: auto;
+      font-size: 11px;
+      color: var(--text-muted);
+      opacity: 0.9;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding-top: 8px;
+    }
+
+    /* CHAT MESSAGES AREA */
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 4px 10px;
+      margin-top: 4px;
+      max-height: calc(100vh - 260px);
+    }
+
+    .chat-messages::-webkit-scrollbar,
+    .info-card::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .chat-messages::-webkit-scrollbar-track,
+    .info-card::-webkit-scrollbar-track {
+      background: var(--scrollbar-track);
+      border-radius: 999px;
+    }
+
+    .chat-messages::-webkit-scrollbar-thumb,
+    .info-card::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+      border-radius: 999px;
+    }
+
+    .message-row {
+      display: flex;
+      margin-bottom: 10px;
+    }
+
+    .message-row.user {
+      justify-content: flex-end;
+    }
+
+    .message-row.assistant {
+      justify-content: flex-start;
+    }
+
+    .message-bubble {
+      max-width: 80%;
+      padding: 10px 14px;
+      border-radius: 18px;
+      font-size: 13px;
+      line-height: 1.55;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.55);
+      position: relative;
+      backdrop-filter: blur(12px);
+    }
+
+    .message-bubble.user {
+      color: #020611;
+      background: linear-gradient(
+        135deg,
+        var(--accent-cyan),
+        var(--accent-blue)
+      );
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6),
+        0 12px 28px rgba(0, 81, 255, 0.65);
+    }
+
+    .message-bubble.assistant {
+      background: radial-gradient(
+        circle at top left,
+        rgba(33, 230, 255, 0.12),
+        rgba(3, 8, 24, 0.98)
+      );
+      color: var(--text-main);
+      border-color: rgba(72, 122, 255, 0.45);
+    }
+
+    .message-meta {
+      font-size: 10px;
+      color: rgba(160, 173, 210, 0.7);
+      margin-top: 3px;
+    }
+
+    .from-label {
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-size: 10px;
+      color: rgba(143, 168, 232, 0.9);
+      margin-bottom: 3px;
+    }
+
+    .from-label.user {
+      text-align: right;
+      color: #021631;
+    }
+
+    /* INPUT AREA (COMPACT TO GIVE MORE CHAT SPACE) */
+
+    .chat-input-panel {
+      margin-top: 8px;
+      border-radius: 16px;
+      border: 1px solid var(--border-soft);
+      background: rgba(5, 11, 26, 0.96);
+      padding: 8px 12px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .prompt-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    #user-input {
+      flex: 1;
+      resize: none;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(7, 15, 35, 0.9);
+      padding: 9px 11px;
+      color: var(--text-main);
+      font-size: 13px;
+      min-height: 32px;
+      max-height: 70px;
+      outline: none;
+      line-height: 1.4;
+    }
+
+    #user-input:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 1px var(--accent-cyan),
+        0 0 22px rgba(33, 230, 255, 0.35);
+    }
+
+    .send-button {
+      flex-shrink: 0;
+      height: 32px;
+      padding: 0 18px;
+      border-radius: var(--radius-pill);
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      background: linear-gradient(
+        135deg,
+        var(--accent-cyan),
+        var(--accent-blue)
+      );
+      color: #010611;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7),
+        0 10px 24px rgba(0, 81, 255, 0.7);
+    }
+
+    .send-button:hover {
+      filter: brightness(1.05);
+      transform: translateY(-0.5px);
+    }
+
+    .send-button:disabled {
+      opacity: 0.5;
+      cursor: default;
+      box-shadow: none;
+    }
+
+    .send-hint-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .admin-password-box {
+      max-width: 230px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .admin-password-input {
+      flex: 1;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(5, 11, 26, 0.95);
+      padding: 3px 7px;
+      font-size: 11px;
+      color: var(--text-main);
+      outline: none;
+    }
+
+    .admin-password-input:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 14px rgba(33, 230, 255, 0.4);
+    }
+
+    .admin-password-label {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .typing-indicator {
+      display: inline-flex;
+      gap: 4px;
+      align-items: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .typing-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      animation: typingBlink 1s infinite ease-in-out;
+    }
+
+    .typing-dot:nth-child(2) {
+      animation-delay: 0.12s;
+    }
+    .typing-dot:nth-child(3) {
+      animation-delay: 0.24s;
+    }
+
+    @keyframes typingBlink {
+      0%,
+      80%,
+      100% {
+        opacity: 0.2;
+        transform: translateY(0);
+      }
+      40% {
+        opacity: 1;
+        transform: translateY(-1px);
+      }
+    }
+
+    @media (max-width: 980px) {
       body {
-        margin: 0;
-        padding: 0;
-        height: 100%;
-        width: 100%;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
-          "Segoe UI", sans-serif;
-        color: var(--text-main);
-      }
-
-      body {
-        background: radial-gradient(circle at top, #1f2937 0, #020617 55%);
-      }
-
-      /* Scrollbars */
-      ::-webkit-scrollbar {
-        width: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: var(--scroll-track);
-      }
-      ::-webkit-scrollbar-thumb {
-        background: var(--scroll-thumb);
-        border-radius: 999px;
-      }
-
-      /* ---------- LOGIN SCREEN ---------- */
-
-      #login-screen {
-        position: fixed;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: radial-gradient(circle at top, #111827 0, #020617 55%);
-        z-index: 999;
-      }
-
-      .login-card {
-        width: 100%;
-        max-width: 420px;
-        background: radial-gradient(circle at top left, #1f2937 0, #020617 65%);
-        border-radius: 18px;
-        padding: 28px 24px 22px;
-        box-shadow: 0 25px 80px rgba(15, 23, 42, 0.9);
-        border: 1px solid rgba(148, 163, 184, 0.3);
-      }
-
-      .login-logo-row {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        margin-bottom: 18px;
-      }
-
-      .login-logo-box {
-        width: 40px;
-        height: 40px;
-        border-radius: 12px;
-        background: radial-gradient(circle at top, #1d4ed8, #020617);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.4),
-          0 14px 35px rgba(15, 23, 42, 0.9);
-        font-size: 0.75rem;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-      }
-
-      .login-title-main {
-        font-size: 0.95rem;
-        letter-spacing: 0.09em;
-        text-transform: uppercase;
-        color: #e5e7eb;
-      }
-
-      .login-title-sub {
-        font-size: 0.8rem;
-        color: var(--text-soft);
-        margin-top: 2px;
-      }
-
-      .login-label {
-        font-size: 0.8rem;
-        color: var(--text-soft);
-        margin-bottom: 6px;
-      }
-
-      .login-input-row {
-        display: flex;
-        gap: 10px;
-        margin-top: 10px;
-      }
-
-      .login-input {
-        flex: 1;
-        padding: 9px 11px;
-        border-radius: 999px;
-        border: 1px solid rgba(148, 163, 184, 0.4);
-        background: rgba(15, 23, 42, 0.9);
-        color: var(--text-main);
-        font-size: 0.9rem;
-        outline: none;
-      }
-
-      .login-input:focus {
-        border-color: var(--accent-soft);
-        box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
-      }
-
-      .login-button {
-        padding: 8px 16px;
-        border-radius: 999px;
-        border: none;
-        cursor: pointer;
-        background: radial-gradient(circle at top left, #38bdf8, #0f766e);
-        color: #0b1220;
-        font-weight: 600;
-        font-size: 0.9rem;
-        box-shadow: 0 12px 30px rgba(8, 47, 73, 0.7);
-      }
-
-      .login-button:active {
-        transform: translateY(1px);
-      }
-
-      .login-error {
-        min-height: 18px;
-        margin-top: 8px;
-        font-size: 0.78rem;
-        color: #fca5a5;
-      }
-
-      .login-hint {
-        margin-top: 14px;
-        font-size: 0.75rem;
-        color: var(--text-soft);
-        line-height: 1.5;
-      }
-
-      /* ---------- APP LAYOUT ---------- */
-
-      #app {
-        display: none;
-        min-height: 100vh;
-        padding: 16px;
+        padding: 18px 10px;
       }
 
       .app-shell {
-        max-width: 1200px;
-        margin: 0 auto;
-        display: flex;
-        gap: 18px;
-      }
-
-      @media (max-width: 900px) {
-        .app-shell {
-          flex-direction: column;
-        }
+        flex-direction: column;
+        max-width: 100%;
       }
 
       .chat-column {
-        flex: 1.7;
-        background: linear-gradient(145deg, #020617 0, #020617 35%, #020617 100%);
-        border-radius: 22px;
-        border: 1px solid rgba(148, 163, 184, 0.32);
-        box-shadow: 0 28px 90px rgba(15, 23, 42, 0.95);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
+        max-height: none;
       }
 
       .sidebar-column {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
+        max-height: none;
       }
 
-      /* Header (sticky inside card) */
-      .chat-header {
-        padding: 14px 20px 10px;
-        border-bottom: 1px solid rgba(15, 23, 42, 0.9);
-        background: radial-gradient(circle at top left, #020617, #020617);
-        position: sticky;
-        top: 0;
-        z-index: 2;
+      .chat-messages {
+        max-height: 340px;
       }
-
-      .header-row-1 {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 4px;
-      }
-
-      .ohla-pill {
-        background: linear-gradient(135deg, #020617, #020617);
-        border-radius: 999px;
-        padding: 4px 10px;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        border: 1px solid rgba(148, 163, 184, 0.45);
-      }
-
-      .ohla-pill img {
-        height: 18px;
-      }
-
-      .ohla-pill-text {
-        font-size: 0.78rem;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--text-soft);
-      }
-
-      .header-title {
-        font-size: 0.95rem;
-        font-weight: 600;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: #e5e7eb;
-      }
-
-      .header-subtitle {
-        font-size: 0.78rem;
-        color: var(--text-soft);
-      }
-
-      .header-designed {
-        margin-top: 4px;
-        font-size: 0.78rem;
-      }
-
-      .header-designed span.label {
-        color: var(--accent-soft);
-        font-weight: 500;
-      }
-
-      .header-designed span.name {
-        color: #f9fafb;
-        font-weight: 600;
-      }
-
-      .prompt-example-row {
-        margin-top: 8px;
-        font-size: 0.75rem;
-        color: var(--text-soft);
-      }
-
-      /* Messages */
-
-      .chat-body {
-        padding: 14px 18px 10px;
-        display: flex;
-        flex-direction: column;
-        height: calc(100vh - 210px);
-        max-height: 720px;
-      }
-
-      @media (max-width: 900px) {
-        .chat-body {
-          height: calc(100vh - 240px);
-        }
-      }
-
-      .messages-scroll {
-        flex: 1;
-        overflow-y: auto;
-        padding-right: 6px;
-      }
-
-      .msg-row {
-        margin-bottom: 10px;
-        display: flex;
-      }
-
-      .msg-row.user {
-        justify-content: flex-end;
-      }
-
-      .msg-bubble {
-        max-width: 90%;
-        border-radius: 18px;
-        padding: 9px 12px;
-        font-size: 0.86rem;
-        line-height: 1.5;
-      }
-
-      .msg-label {
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.14em;
-        margin-bottom: 4px;
-        opacity: 0.8;
-      }
-
-      .msg-bubble.assistant {
-        background: rgba(15, 23, 42, 0.96);
-        border: 1px solid rgba(148, 163, 184, 0.4);
-        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.85);
-      }
-
-      .msg-bubble.user {
-        background: linear-gradient(
-          135deg,
-          var(--bubble-user-1),
-          var(--bubble-user-2),
-          var(--bubble-user-3)
-        );
-        color: #0f172a;
-        font-weight: 500;
-        box-shadow: 0 18px 40px rgba(8, 47, 73, 0.9);
-      }
-
-      /* Input row */
-
-      .input-panel {
-        margin-top: 8px;
-        border-radius: 16px;
-        border: 1px solid rgba(148, 163, 184, 0.4);
-        background: radial-gradient(circle at top left, #020617, #020617);
-        padding: 8px 10px 8px 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-
-      .input-row-main {
-        display: flex;
-        align-items: flex-end;
-        gap: 10px;
-      }
-
-      .chat-input {
-        flex: 1;
-        min-height: 42px;
-        max-height: 80px;
-        resize: none;
-        border-radius: 12px;
-        border: 1px solid rgba(148, 163, 184, 0.45);
-        background: rgba(15, 23, 42, 0.9);
-        color: var(--text-main);
-        font-size: 0.86rem;
-        padding: 8px 10px;
-        outline: none;
-      }
-
-      .chat-input:focus {
-        border-color: var(--accent-soft);
-        box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
-      }
-
-      .send-button {
-        border-radius: 999px;
-        border: none;
-        padding: 9px 18px;
-        font-size: 0.88rem;
-        font-weight: 600;
-        background: radial-gradient(circle at top left, var(--accent-soft), #0f766e);
-        color: #020617;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        box-shadow: 0 16px 40px rgba(8, 47, 73, 0.85);
-      }
-
-      .send-button:active {
-        transform: translateY(1px);
-      }
-
-      .input-row-password {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 0.75rem;
-        color: var(--text-soft);
-      }
-
-      .password-input {
-        width: 150px;
-        border-radius: 999px;
-        border: 1px dashed rgba(148, 163, 184, 0.5);
-        background: rgba(15, 23, 42, 0.9);
-        color: var(--text-main);
-        font-size: 0.8rem;
-        padding: 4px 9px;
-        outline: none;
-      }
-
-      /* ---------- SIDEBAR ---------- */
-
-      .tech-logo-card {
-        background: radial-gradient(circle at top left, #020617, #020617 55%, #020617);
-        border-radius: 22px;
-        border: 1px solid rgba(148, 163, 184, 0.4);
-        padding: 16px 16px 12px;
-        box-shadow: 0 24px 80px rgba(15, 23, 42, 0.9);
-      }
-
-      .tech-logo-card img {
-        width: 100%;
-        border-radius: 18px;
-        display: block;
-      }
-
-      .tech-logo-caption {
-        margin-top: 8px;
-        font-size: 0.75rem;
-        color: var(--text-soft);
-        text-align: center;
-      }
-
-      .how-card {
-        flex: 1;
-        background: radial-gradient(circle at top left, #020617, #020617 55%, #020617);
-        border-radius: 22px;
-        border: 1px solid rgba(148, 163, 184, 0.4);
-        padding: 14px 16px 12px;
-        box-shadow: 0 24px 80px rgba(15, 23, 42, 0.9);
-        font-size: 0.82rem;
-      }
-
-      .how-title {
-        font-size: 0.9rem;
-        font-weight: 600;
-        letter-spacing: 0.15em;
-        text-transform: uppercase;
-        color: #e5e7eb;
-        margin-bottom: 8px;
-      }
-
-      .how-list {
-        padding-left: 16px;
-        color: var(--text-soft);
-      }
-
-      .how-list li {
-        margin-bottom: 5px;
-      }
-
-      .how-footer {
-        margin-top: 8px;
-        border-top: 1px solid rgba(51, 65, 85, 0.8);
-        padding-top: 6px;
-        font-size: 0.7rem;
-        color: var(--text-soft);
-      }
-
-      .clock-card {
-        background: radial-gradient(circle at top left, #020617, #020617 60%, #020617);
-        border-radius: 22px;
-        border: 1px solid rgba(148, 163, 184, 0.4);
-        padding: 10px 16px;
-        margin-bottom: 10px;
-        box-shadow: 0 24px 80px rgba(15, 23, 42, 0.9);
-      }
-
-      .clock-time {
-        font-family: "SF Mono", ui-monospace, Menlo, Monaco, Consolas,
-          "Liberation Mono", "Courier New", monospace;
-        font-size: 1.4rem;
-        font-weight: 600;
-        letter-spacing: 0.1em;
-        text-align: center;
-      }
-
-      .clock-date {
-        margin-top: 2px;
-        font-size: 0.78rem;
-        color: var(--text-soft);
-        text-align: center;
-      }
-    </style>
-  </head>
-  <body>
-    <!-- LOGIN SCREEN -->
-    <div id="login-screen">
-      <div class="login-card">
-        <div class="login-logo-row">
-          <div class="login-logo-box">OHLA</div>
-          <div>
-            <div class="login-title-main">OHLA GPT</div>
-            <div class="login-title-sub">
-              I-5 Project Assistant — Santa Clarita, CA
-            </div>
+    }
+  </style>
+</head>
+<body>
+  <!-- LOGIN SCREEN -->
+  <div id="login-screen">
+    <div id="login-screen-inner">
+      <div class="login-logo-row">
+        <div class="logo-badge">
+          <img src="logo.png" alt="OHLA logo" />
+        </div>
+        <div>
+          <div class="login-title">OHLA GPT ACCESS</div>
+          <div class="login-subtitle">
+            Restricted internal assistant for the I-5 North County Enhancement
+            Project.
           </div>
         </div>
-        <div class="login-label">Enter site password to access the assistant</div>
-        <div class="login-input-row">
+      </div>
+
+      <div class="login-panel">
+        <h2>Enter site password</h2>
+        <p>
+          This site is for OHLA USA internal use only. Please enter the project
+          access password to continue.
+        </p>
+
+        <form id="login-form" class="login-form">
+          <label class="login-label" for="login-password">
+            Password
+          </label>
           <input
-            id="site-password-input"
+            id="login-password"
             type="password"
             class="login-input"
-            placeholder="Site password"
+            autocomplete="current-password"
+            placeholder="Enter site password"
           />
-          <button id="site-password-button" class="login-button">
+          <button type="submit" class="login-button">
             Unlock
           </button>
-        </div>
-        <div id="site-password-error" class="login-error"></div>
-        <div class="login-hint">
-          This simple lock is only to keep the site private. For sensitive
-          contract information, always verify against official signed
-          documents.
-        </div>
+          <div id="login-error" class="login-error"></div>
+        </form>
+      </div>
+
+      <div class="login-footnote">
+        This simple login is client-side only and does not replace OHLA’s
+        security policies.
       </div>
     </div>
+  </div>
 
-    <!-- APP -->
-    <div id="app">
-      <div class="app-shell">
-        <!-- CHAT COLUMN -->
-        <section class="chat-column">
-          <header class="chat-header">
-            <div class="header-row-1">
-              <div class="ohla-pill">
-                <img src="logo.png" alt="OHLA USA" />
-                <span class="ohla-pill-text">Ohla gpt — i-5 assistant</span>
-              </div>
-            </div>
-            <div class="header-title">
-              OHLA GPT — I-5 Project Assistant
-            </div>
-            <div class="header-subtitle">
+  <!-- MAIN APP -->
+  <div id="app" class="app-shell hidden">
+    <!-- LEFT: CHAT COLUMN -->
+    <div class="chat-column">
+      <div class="chat-header">
+        <div class="header-row">
+          <div class="logo-badge">
+            <img src="logo.png" alt="OHLA logo" />
+          </div>
+          <div class="title-block">
+            <div class="app-title">OHLA GPT — I-5 Project Assistant</div>
+            <div class="app-subtitle">
               Santa Clarita I-5 North County Enhancement Project
             </div>
-            <div class="header-designed">
-              <span class="label">Designed by</span>
-              &nbsp;<span class="name">Ibrahim Altamimi</span>
+            <div class="designed-by">
+              <span class="designed-by-label">Designed by</span>
+              <span class="designed-by-name">Ibrahim Altamimi</span>
             </div>
-            <div class="prompt-example-row">
+          </div>
+        </div>
+        <div class="chat-header-divider"></div>
+      </div>
+
+      <div class="chat-messages" id="chat-messages">
+        <!-- Initial assistant message -->
+        <div class="message-row assistant">
+          <div class="message-bubble assistant">
+            <div class="from-label">ASSISTANT</div>
+            <div>
+              Hello, this is the OHLA I-5 project assistant. How can I help you
+              today?<br /><br />
               Ask about the I-5 project files, RFIs, PCOs, permits, specs, or
-              submittals…
-            </div>
-          </header>
-
-          <div class="chat-body">
-            <div id="messages" class="messages-scroll">
-              <div class="msg-row assistant">
-                <div class="msg-bubble assistant">
-                  <div class="msg-label">Assistant</div>
-                  <div>
-                    Hello, this is the OHLA I-5 project assistant. How can I
-                    help you today? Ask me about OHLA USA I-5 project files,
-                    specs, RFIs, PCOs, permits, submittals, or Metro/Caltrans
-                    requirements.
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="input-panel">
-              <div class="input-row-main">
-                <textarea
-                  id="user-input"
-                  class="chat-input"
-                  placeholder="Ask about the I-5 project files, RFIs, PCOs, permits, specs, or submittals..."
-                  rows="1"
-                ></textarea>
-                <button id="send-btn" class="send-button">
-                  Enter
-                </button>
-              </div>
-              <div class="input-row-password">
-                <span>Admin password for financial questions (optional):</span>
-                <input
-                  id="finance-password"
-                  type="password"
-                  class="password-input"
-                />
-              </div>
+              submittals.
             </div>
           </div>
-        </section>
+        </div>
+      </div>
 
-        <!-- SIDEBAR -->
-        <aside class="sidebar-column">
-          <div class="clock-card">
-            <div id="clock-time" class="clock-time">00:00:00 PM</div>
-            <div id="clock-date" class="clock-date">Loading…</div>
-          </div>
-
-          <div class="tech-logo-card">
-            <img
-              src="ohla-tech-logo.png"
-              alt="OHLA USA Tech Logo"
+      <div class="chat-input-panel">
+        <div class="prompt-row">
+          <textarea
+            id="user-input"
+            rows="1"
+            placeholder="Ask about the I-5 project files, RFIs, PCOs, permits, specs, or submittals..."
+          ></textarea>
+          <button id="send-button" class="send-button">
+            Send
+          </button>
+        </div>
+        <div class="send-hint-row">
+          <div>Press <strong>Enter</strong> to send · <strong>Shift+Enter</strong> for a new line</div>
+          <div class="admin-password-box">
+            <span class="admin-password-label">Admin password:</span>
+            <input
+              type="password"
+              id="finance-password"
+              class="admin-password-input"
+              placeholder="for cost questions"
             />
-            <div class="tech-logo-caption">
-              OHLA USA — AI-enhanced project assistant for the I-5 North County
-              Enhancement Project.
-            </div>
           </div>
-
-          <div class="how-card">
-            <div class="how-title">How this assistant works</div>
-            <ul class="how-list">
-              <li>
-                Uses OHLA I-5 project documents: POTDs, permits, RFIs, PCOs,
-                subcontractor contracts, project contract submittals, and
-                Caltrans / Metro specs stored in project files.
-              </li>
-              <li>
-                First tries to answer from project files and summaries. If the
-                answer isn’t clear, it may fall back to general
-                civil-construction knowledge.
-              </li>
-              <li>
-                The AI model is still under construction and some answers could
-                be worng.
-              </li>
-              <li>
-                Financial &amp; cost-related questions require admin permission
-                and may ask for a password.
-              </li>
-            </ul>
-            <div class="how-footer">
-              This assistant is a helper only and does not replace official
-              contract documents. Always verify critical information against
-              signed plans/specs and approved submittals.
-            </div>
-          </div>
-        </aside>
+        </div>
       </div>
     </div>
 
-    <script>
-      // ---------- SIMPLE SITE PASSWORD ----------
-      const SITE_PASSWORD = "ohlausa6677";
+    <!-- RIGHT: SIDEBAR COLUMN -->
+    <div class="sidebar-column">
+      <div class="clock-panel">
+        <div id="clock-time" class="clock-time">--:--:--</div>
+        <div id="clock-date" class="clock-date"></div>
+      </div>
 
-      const loginScreen = document.getElementById("login-screen");
-      const app = document.getElementById("app");
-      const loginInput = document.getElementById("site-password-input");
-      const loginButton = document.getElementById("site-password-button");
-      const loginError = document.getElementById("site-password-error");
+      <div class="logo-card">
+        <div class="logo-card-inner">
+          <img
+            src="ohla-tech-logo.png"
+            alt="OHLA USA tech logo"
+          />
+        </div>
+        <div class="logo-card-caption">
+          OHLA USA — AI-enhanced project assistant for the I-5 North County
+          Enhancement Project.
+        </div>
+      </div>
 
-      function unlockSite() {
-        if (loginInput.value === SITE_PASSWORD) {
-          loginError.textContent = "";
-          loginScreen.style.display = "none";
-          app.style.display = "block";
-          document.getElementById("user-input").focus();
-        } else {
-          loginError.textContent = "Incorrect password. Please try again.";
-        }
+      <div class="info-card">
+        <div class="info-title">How this assistant works</div>
+        <ul class="info-list">
+          <li>
+            Uses OHLA I-5 project documents: POTDs, permits, RFIs, PCOs,
+            subcontractor contracts, project contract submittals, and Caltrans /
+            Metro specs stored in a secure AWS S3 bucket.
+          </li>
+          <li>
+            First tries to answer from project files and summaries. If the
+            answer isn’t clear, it may fall back to general civil-construction
+            knowledge.
+          </li>
+          <li>
+            Some documents are read using OpenAI Vision. You may see an
+            “extracted text preview” when a specific file is used.
+          </li>
+          <li>
+            Financial &amp; cost-related questions require admin permission and
+            may ask for a password.
+          </li>
+        </ul>
+        <div class="info-footnote">
+          This assistant is a helper only and does not replace official contract
+          documents. Always verify critical information against signed plans,
+          specs, and approved submittals.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /***************
+     * SIMPLE LOGIN
+     ***************/
+    const SITE_PASSWORD = "ohlausa6677";
+
+    const loginScreen = document.getElementById("login-screen");
+    const appShell = document.getElementById("app");
+    const loginForm = document.getElementById("login-form");
+    const loginPasswordInput = document.getElementById("login-password");
+    const loginError = document.getElementById("login-error");
+
+    function showApp() {
+      loginScreen.classList.add("hidden");
+      appShell.classList.remove("hidden");
+    }
+
+    // Check localStorage
+    try {
+      if (localStorage.getItem("ohlagpt_authed") === "true") {
+        showApp();
       }
+    } catch (e) {
+      // ignore if blocked
+    }
 
-      loginButton.addEventListener("click", unlockSite);
+    loginForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const value = loginPasswordInput.value.trim();
+      if (value === SITE_PASSWORD) {
+        try {
+          localStorage.setItem("ohlagpt_authed", "true");
+        } catch (err) {}
+        showApp();
+      } else {
+        loginError.textContent = "Incorrect password. Please try again.";
+      }
+    });
 
-      loginInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          unlockSite();
-        }
+    /***************
+     * CLOCK
+     ***************/
+    function updateClock() {
+      const now = new Date();
+      const timeEl = document.getElementById("clock-time");
+      const dateEl = document.getElementById("clock-date");
+      if (!timeEl || !dateEl) return;
+
+      const timeStr = now.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
       });
 
-      // ---------- CLOCK ----------
-      function updateClock() {
-        const now = new Date();
-        const timeEl = document.getElementById("clock-time");
-        const dateEl = document.getElementById("clock-date");
+      const dateStr = now.toLocaleDateString([], {
+        weekday: "short",
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
 
-        const timeStr = now.toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
+      timeEl.textContent = timeStr;
+      dateEl.textContent = dateStr;
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    /***************
+     * CHAT CLIENT
+     ***************/
+    const messagesEl = document.getElementById("chat-messages");
+    const userInputEl = document.getElementById("user-input");
+    const sendButtonEl = document.getElementById("send-button");
+    const financePasswordEl = document.getElementById("finance-password");
+
+    function appendMessage(role, text) {
+      const row = document.createElement("div");
+      row.className = "message-row " + role;
+
+      const bubble = document.createElement("div");
+      bubble.className = "message-bubble " + role;
+
+      const label = document.createElement("div");
+      label.className = "from-label " + role;
+      label.textContent = role === "user" ? "YOU" : "ASSISTANT";
+
+      const body = document.createElement("div");
+      body.innerHTML = text
+        .replace(/\n/g, "<br>")
+        .replace(/  /g, "&nbsp;&nbsp;");
+
+      bubble.appendChild(label);
+      bubble.appendChild(body);
+      row.appendChild(bubble);
+      messagesEl.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    let typingRow = null;
+    function showTyping() {
+      if (typingRow) return;
+      typingRow = document.createElement("div");
+      typingRow.className = "message-row assistant";
+
+      const bubble = document.createElement("div");
+      bubble.className = "message-bubble assistant";
+
+      const label = document.createElement("div");
+      label.className = "from-label";
+      label.textContent = "ASSISTANT";
+
+      const typing = document.createElement("div");
+      typing.className = "typing-indicator";
+      typing.innerHTML =
+        '<span>Thinking</span><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+
+      bubble.appendChild(label);
+      bubble.appendChild(typing);
+      typingRow.appendChild(bubble);
+      messagesEl.appendChild(typingRow);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function hideTyping() {
+      if (!typingRow) return;
+      typingRow.remove();
+      typingRow = null;
+    }
+
+    async function sendMessage() {
+      const text = userInputEl.value.trim();
+      if (!text) return;
+      const financePassword = financePasswordEl.value.trim();
+
+      appendMessage("user", text);
+      userInputEl.value = "";
+      userInputEl.style.height = "auto";
+
+      sendButtonEl.disabled = true;
+      showTyping();
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: text,
+            financePassword: financePassword,
+          }),
         });
 
-        const dateStr = now.toLocaleDateString([], {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        });
+        const data = await res.json();
+        hideTyping();
 
-        timeEl.textContent = timeStr;
-        dateEl.textContent = dateStr;
-      }
+        const answer = data && data.answer
+          ? data.answer
+          : "Sorry, I couldn’t generate a response.";
 
-      updateClock();
-      setInterval(updateClock, 1000);
-
-      // ---------- CHAT CLIENT ----------
-      const messagesEl = document.getElementById("messages");
-      const userInputEl = document.getElementById("user-input");
-      const sendBtnEl = document.getElementById("send-btn");
-      const financePasswordEl = document.getElementById("finance-password");
-
-      function appendMessage(role, text) {
-        const row = document.createElement("div");
-        row.className = "msg-row " + role;
-
-        const bubble = document.createElement("div");
-        bubble.className = "msg-bubble " + role;
-
-        const label = document.createElement("div");
-        label.className = "msg-label";
-        label.textContent = role === "user" ? "You" : "Assistant";
-
-        const body = document.createElement("div");
-        body.innerHTML = text
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/\n/g, "<br>");
-
-        bubble.appendChild(label);
-        bubble.appendChild(body);
-        row.appendChild(bubble);
-        messagesEl.appendChild(row);
+        appendMessage("assistant", answer);
+      } catch (err) {
+        hideTyping();
+        appendMessage(
+          "assistant",
+          "Sorry, something went wrong while contacting the server."
+        );
+      } finally {
+        sendButtonEl.disabled = false;
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
+    }
 
-      async function sendMessage() {
-        const text = userInputEl.value.trim();
-        if (!text) return;
+    sendButtonEl.addEventListener("click", () => {
+      sendMessage();
+    });
 
-        appendMessage("user", text);
-        userInputEl.value = "";
-        userInputEl.style.height = "auto";
-
-        const financePassword = financePasswordEl.value || "";
-
-        try {
-          const res = await fetch("/api/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              message: text,
-              financePassword,
-            }),
-          });
-
-          if (!res.ok) {
-            throw new Error("Network error");
-          }
-
-          const data = await res.json();
-          appendMessage("assistant", data.answer || "[No answer provided]");
-        } catch (err) {
-          console.error(err);
-          appendMessage(
-            "assistant",
-            "Sorry, something went wrong while contacting the server."
-          );
-        }
+    // Enter to send, Shift+Enter for newline
+    userInputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
       }
+    });
 
-      sendBtnEl.addEventListener("click", sendMessage);
-
-      // Enter = send, Shift+Enter = new line
-      userInputEl.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          sendMessage();
-        }
-      });
-
-      // Auto-grow textarea
-      userInputEl.addEventListener("input", () => {
-        userInputEl.style.height = "auto";
-        userInputEl.style.height = userInputEl.scrollHeight + "px";
-      });
-    </script>
-  </body>
+    // Auto-grow textarea height
+    userInputEl.addEventListener("input", () => {
+      userInputEl.style.height = "auto";
+      userInputEl.style.height = Math.min(userInputEl.scrollHeight, 70) + "px";
+    });
+  </script>
+</body>
 </html>
