@@ -26,17 +26,19 @@ AWS.config.update({ region: AWS_REGION });
 const s3 = new AWS.S3();
 const textract = new AWS.Textract();
 
-// ===== In-memory index of project files =====
+// ===== In-memory index of S3 objects =====
 let s3IndexSummary = "";
-let s3IndexJson = null;
-// full list of objects so we can map filenames -> keys
-let s3Objects = [];
+let s3Objects = []; // array of { Key, Size, LastModified }
+let s3IndexLoaded = false;
 
-// ---------- helpers for S3 / Textract ----------
+// simple in-memory OCR cache (per process)
+const textractCache = new Map(); // key: s3Key, value: text
+
+// ---------- Helpers for S3 index / file name matching ----------
 
 async function loadS3Index() {
   if (!S3_BUCKET) {
-    console.log("S3_BUCKET is not set. S3 search will be disabled.");
+    console.log("S3_BUCKET is not set. S3 search/OCR will be disabled.");
     return;
   }
 
@@ -46,25 +48,7 @@ async function loadS3Index() {
   console.log("S3_PREFIX:", S3_PREFIX);
 
   try {
-    // 1) Try optional index.json (human-maintained)
-    try {
-      const indexObj = await s3
-        .getObject({
-          Bucket: S3_BUCKET,
-          Key: path.posix.join(S3_PREFIX, "index.json"),
-        })
-        .promise();
-
-      const json = JSON.parse(indexObj.Body.toString("utf-8"));
-      s3IndexJson = json;
-      console.log("Loaded custom index.json from S3 with", json.length, "entries");
-    } catch (err) {
-      console.log("No index.json found or failed to parse – proceeding with object list only.");
-    }
-
-    // 2) Build a list of *all* objects under S3_PREFIX
     const parts = [];
-    s3Objects = [];
     let continuationToken = undefined;
 
     do {
@@ -77,158 +61,162 @@ async function loadS3Index() {
         .promise();
 
       (result.Contents || []).forEach((obj) => {
-        const key = obj.Key;
-        if (key.endsWith("/")) return; // folder marker
+        if (!obj.Key || obj.Key.endsWith("/")) return; // skip folders
         s3Objects.push(obj);
-        const shortKey = S3_PREFIX ? key.replace(S3_PREFIX, "") : key;
+
+        const shortKey = S3_PREFIX ? obj.Key.replace(S3_PREFIX, "") : obj.Key;
         parts.push(shortKey);
       });
 
-      continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+      continuationToken = result.IsTruncated
+        ? result.NextContinuationToken
+        : undefined;
     } while (continuationToken);
 
     s3IndexSummary =
       parts.length > 0
         ? `The OHLA I-5 project files in S3 include documents such as:\n- ${parts.join(
             "\n- "
-          )}\n\nUse these names when referring to documents (permits, RFIs, PCOs, specs, submittals, etc.).`
+          )}\n\nUse these names when referring to documents (permits, RFIs, POTDs, PCOs, specs, submittals, etc.).`
         : "No project files were found in S3.";
 
-    console.log("Built S3 index summary with", parts.length, "objects.");
+    console.log(
+      `Built S3 index summary with ${parts.length} objects. (pdfs: ${
+        s3Objects.filter((o) => o.Key.toLowerCase().endsWith(".pdf")).length
+      })`
+    );
+    s3IndexLoaded = true;
   } catch (err) {
     console.error("Error while loading S3 index:", err);
   }
 }
 
-// Extract a PDF name from free-text user message
-function extractPdfName(text) {
-  if (!text) return null;
-  const lower = text.toLowerCase();
-
-  // first: something inside quotes "...pdf"
-  const quoted = text.match(/"([^"]+\.pdf)"/i);
-  if (quoted && quoted[1]) {
-    return quoted[1].trim();
-  }
-
-  // second: first substring that looks like "<anything>.pdf"
-  // allow letters, numbers, spaces, dots, dashes, underscores
-  const match = text.match(/([a-z0-9._\- ]+\.pdf)/i);
-  if (match && match[1]) {
-    return match[1].trim();
-  }
-
-  // if the user just writes the file name alone
-  if (lower.endsWith(".pdf")) {
-    return text.trim();
-  }
-
-  return null;
+/**
+ * Extract something that looks like a PDF file name from the user question,
+ * e.g. "give me summary for this file 2025.11.01 - POTD.pdf"
+ *   -> "2025.11.01 - POTD.pdf"
+ */
+function extractFilenameFromQuestion(question) {
+  if (!question) return null;
+  const m = question.match(/([0-9A-Za-z()[\]_\- ,]+\.pdf)/i);
+  if (!m) return null;
+  return m[1].trim();
 }
 
-// Given "2025.11.01 - POTD.pdf" find its full S3 key
-function findS3KeyForPdf(pdfName) {
-  if (!pdfName || !s3Objects.length) return null;
+/**
+ * Given a PDF file name like "2025.11.01 - POTD.pdf",
+ * find the best matching S3 object key from our index.
+ */
+function findS3KeyForFilename(filename) {
+  if (!filename || !s3Objects.length) return null;
+  const lowerName = filename.toLowerCase();
 
-  const target = pdfName.toLowerCase().trim();
+  let bestKey = null;
 
-  // try exact endsWith match first (folder + filename)
-  let found = s3Objects.find((obj) =>
-    obj.Key.toLowerCase().endsWith("/" + target)
-  );
+  for (const obj of s3Objects) {
+    const base = path.basename(obj.Key).toLowerCase();
 
-  if (!found) {
-    // maybe no folder, or slightly different path – just endsWith filename
-    found = s3Objects.find((obj) => obj.Key.toLowerCase().endsWith(target));
-  }
-
-  return found ? found.Key : null;
-}
-
-// cache key for extracted text in S3
-function textractCacheKeyFor(s3Key) {
-  // Example:
-  //   original: GPT Files/18 Permits/01. Encroachment Permits/0721ADP3197_Permit.pdf
-  //   cache:   GPT Files/__cache/18 Permits/01. Encroachment Permits/0721ADP3197_Permit.pdf.txt
-  const relative = S3_PREFIX ? s3Key.replace(S3_PREFIX, "") : s3Key;
-  return path.posix.join(S3_PREFIX, "__cache", relative + ".txt");
-}
-
-// get cached Textract text or call Textract & cache
-async function getOrExtractPdfText(s3Key) {
-  if (!S3_BUCKET || !s3Key) return null;
-
-  const cacheKey = textractCacheKeyFor(s3Key);
-  console.log("[OHLA-GPT] Looking for cached text at S3 key:", cacheKey);
-
-  // 1) try cache
-  try {
-    const cachedObj = await s3
-      .getObject({
-        Bucket: S3_BUCKET,
-        Key: cacheKey,
-      })
-      .promise();
-
-    const txt = cachedObj.Body.toString("utf-8");
-    if (txt && txt.trim().length > 0) {
-      console.log("[OHLA-GPT] Found cached Textract text.");
-      return txt;
+    if (base === lowerName) {
+      // perfect match
+      return obj.Key;
     }
-  } catch (err) {
-    console.log("[OHLA-GPT] No cached text found at", cacheKey, "- will run Textract...");
+
+    if (!bestKey) {
+      // loose contains match
+      if (lowerName.includes(base) || base.includes(lowerName)) {
+        bestKey = obj.Key;
+      }
+    }
   }
 
-  // 2) run Textract
-  console.log("[OHLA-GPT] Downloading PDF source for Textract:", s3Key);
-
-  const params = {
-    Document: {
-      S3Object: {
-        Bucket: S3_BUCKET,
-        Name: s3Key,
-      },
-    },
-  };
-
-  const textractResp = await textract
-    .detectDocumentText(params)
-    .promise()
-    .catch((err) => {
-      console.error(
-        "Textract error for",
-        s3Key,
-        err && err.code,
-        err && err.message
-      );
-      throw err;
-    });
-
-  const blocks = textractResp.Blocks || [];
-  const lines = blocks
-    .filter((b) => b.BlockType === "LINE" && b.Text)
-    .map((b) => b.Text);
-  const fullText = lines.join("\n");
-
-  // cache it back to S3 for next time
-  try {
-    await s3
-      .putObject({
-        Bucket: S3_BUCKET,
-        Key: cacheKey,
-        Body: fullText,
-        ContentType: "text/plain",
-      })
-      .promise();
-    console.log("[OHLA-GPT] Cached Textract text to", cacheKey);
-  } catch (err) {
-    console.error("Failed to cache Textract result:", err);
-  }
-
-  return fullText;
+  return bestKey;
 }
 
-// very rough detector for financial / cost questions
+/**
+ * Try to load cached OCR text for a given S3 key from memory.
+ */
+function getCachedOcrForKey(s3Key) {
+  return textractCache.get(s3Key) || null;
+}
+
+/**
+ * Cache OCR text in memory for this process.
+ */
+function setCachedOcrForKey(s3Key, text) {
+  if (!s3Key || !text) return;
+  textractCache.set(s3Key, text);
+}
+
+/**
+ * Run AWS Textract DetectDocumentText on a PDF stored in S3.
+ * Uses simple in-memory caching to avoid re-scanning the same file.
+ *
+ * Returns { status: "ok" | "error", text?, errorMessage? }
+ */
+async function runTextractOnPdf(s3Key) {
+  if (!S3_BUCKET || !s3Key) {
+    return {
+      status: "error",
+      errorMessage: "Textract is not configured for this environment.",
+    };
+  }
+
+  // in-memory cache first
+  const cached = getCachedOcrForKey(s3Key);
+  if (cached) {
+    console.log(`[Textract] Using cached OCR for S3 key: ${s3Key}`);
+    return { status: "ok", text: cached, cached: true };
+  }
+
+  console.log(`[Textract] Running DetectDocumentText for S3 key: ${s3Key}`);
+
+  try {
+    const params = {
+      Document: {
+        S3Object: {
+          Bucket: S3_BUCKET,
+          Name: s3Key, // "Name" is the correct Textract field
+        },
+      },
+    };
+
+    const response = await textract.detectDocumentText(params).promise();
+
+    const lines = [];
+    if (response && Array.isArray(response.Blocks)) {
+      for (const b of response.Blocks) {
+        if (b.BlockType === "LINE" && b.Text) {
+          lines.push(b.Text);
+        }
+      }
+    }
+
+    const text = lines.join("\n");
+    console.log(
+      `[Textract] Extracted ${lines.length} lines (approximately ${text.length} chars).`
+    );
+
+    if (text.length > 0) {
+      setCachedOcrForKey(s3Key, text);
+    }
+
+    return { status: "ok", text };
+  } catch (err) {
+    console.error(
+      `[Textract] Error for key: ${s3Key} -> ${err.code || ""}: ${
+        err.message || err
+      }`
+    );
+    return {
+      status: "error",
+      errorMessage: `${err.code || "TextractError"}: ${err.message || err}`,
+    };
+  }
+}
+
+/**
+ * Very rough detector for financial / cost questions.
+ */
 function isFinancialQuestion(text) {
   if (!text) return false;
   const lower = text.toLowerCase();
@@ -281,28 +269,56 @@ app.post("/api/chat", async (req, res) => {
       }
     }
 
-    // 2) Optional: detect PDF name and try Textract
-    let pdfName = null;
-    let pdfS3Key = null;
-    let pdfExtractText = null;
-    let textractNote = null;
+    // 2) Optional Textract step – try to detect if user mentioned a PDF
+    let textractInfo = {
+      status: "none",
+      filename: null,
+      s3Key: null,
+      textPreview: null,
+      errorMessage: null,
+    };
 
-    if (S3_BUCKET) {
-      pdfName = extractPdfName(userMessage);
-      if (pdfName) {
-        console.log('[OHLA-GPT] Detected mentioned PDF name in question:', pdfName);
-        pdfS3Key = findS3KeyForPdf(pdfName);
+    if (S3_BUCKET && s3IndexLoaded) {
+      const filename = extractFilenameFromQuestion(userMessage);
+      if (filename) {
+        console.log(
+          `[Textract] User question appears to mention PDF filename: "${filename}"`
+        );
 
-        if (pdfS3Key) {
-          console.log("[OHLA-GPT] Mapped PDF name to S3 key:", pdfS3Key);
-          try {
-            pdfExtractText = await getOrExtractPdfText(pdfS3Key);
-          } catch (err) {
-            textractNote = `Textract could not read "${pdfName}". Reason: ${err.message || err.code || "Unknown error"}.`;
-          }
+        const s3Key = findS3KeyForFilename(filename);
+        if (!s3Key) {
+          console.log(
+            `[Textract] Could not find any S3 object matching "${filename}".`
+          );
+          textractInfo = {
+            status: "error",
+            filename,
+            s3Key: null,
+            textPreview: null,
+            errorMessage: `No S3 object found that matches the file name "${filename}".`,
+          };
         } else {
-          textractNote = `Textract could not read "${pdfName}". Reason: No S3 object found for ${pdfName}.`;
-          console.warn("[OHLA-GPT]", textractNote);
+          console.log(`[Textract] Matched to S3 key: ${s3Key}`);
+          const ocrResult = await runTextractOnPdf(s3Key);
+
+          if (ocrResult.status === "ok" && ocrResult.text) {
+            const preview = ocrResult.text.slice(0, 2500); // keep prompt small
+            textractInfo = {
+              status: "ok",
+              filename,
+              s3Key,
+              textPreview: preview,
+              errorMessage: null,
+            };
+          } else {
+            textractInfo = {
+              status: "error",
+              filename,
+              s3Key,
+              textPreview: null,
+              errorMessage: ocrResult.errorMessage,
+            };
+          }
         }
       }
     }
@@ -311,7 +327,7 @@ app.post("/api/chat", async (req, res) => {
     let systemPrompt = `
 You are "OHLA GPT — I-5 Project Assistant" for the Santa Clarita I-5 North County Enhancement Project.
 
-You have access to a summary of the OHLA I-5 project documents stored in an AWS S3 bucket (permits, RFIs, PCOs, contracts, submittals, specs, etc.).
+You have access to a summary of the OHLA I-5 project documents stored in an AWS S3 bucket (permits, POTDs, RFIs, PCOs, contracts, submittals, specs, etc.).
 You also have general civil-construction knowledge.
 
 First, try to answer using the OHLA I-5 project context only. If the question clearly cannot be answered from project context, you may fall back on general knowledge, but you must clearly say when you are doing that.
@@ -324,42 +340,19 @@ Project file summary (from S3):
 ${s3IndexSummary || "No S3 index is currently loaded."}
 `;
 
-    if (pdfExtractText) {
-      systemPrompt += `
-The user mentioned a specific PDF file (${pdfName}). The following text was extracted from that PDF using OCR (AWS Textract). You may use it to answer their question. If something is unclear, explain the limitation instead of guessing.
-
-"""${pdfExtractText.slice(0, 8000)}"""
-`;
-    } else if (textractNote) {
-      // internal note so the model knows why it doesn't see OCR text
-      systemPrompt += `
-Internal note: ${textractNote}
-If you cannot see any extracted text from the PDF, explain that OCR was not available and answer based only on project summaries / general knowledge. Do not invent specific content from the file.
-`;
-    }
-
-    // 4) Optional: include a compact JSON index for better grounding
-    const indexJsonSnippet = s3IndexJson
-      ? JSON.stringify(s3IndexJson).slice(0, 6000) // keep prompt small
-      : null;
-
-    if (indexJsonSnippet) {
+    if (textractInfo.status === "ok" && textractInfo.textPreview) {
       systemPrompt += `
 
-Additional machine-readable index data:
-${indexJsonSnippet}
+Additional extracted text from the PDF "${textractInfo.filename}" (via AWS Textract).
+Use this as highly relevant context if the user is asking about that document:
+
+"""${textractInfo.textPreview}"""
 `;
     }
 
     const messages = [
-      {
-        role: "system",
-        content: systemPrompt,
-      },
-      {
-        role: "user",
-        content: userMessage,
-      },
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMessage },
     ];
 
     const completion = await openai.chat.completions.create({
@@ -368,19 +361,27 @@ ${indexJsonSnippet}
       temperature: 0.2,
     });
 
-    const answer = completion.choices[0].message.content.trim();
+    const answer = (completion.choices[0].message.content || "").trim();
 
     res.json({
       fromFiles: true,
       answer,
       needsPassword: false,
-      textractNote: textractNote || null,
+      textract: textractInfo,
     });
   } catch (err) {
     console.error("Error in /api/chat:", err);
     res.status(500).json({
       fromFiles: false,
       answer: "Sorry, something went wrong while processing your request.",
+      needsPassword: false,
+      textract: {
+        status: "error",
+        filename: null,
+        s3Key: null,
+        textPreview: null,
+        errorMessage: "Internal server error in /api/chat.",
+      },
     });
   }
 });
