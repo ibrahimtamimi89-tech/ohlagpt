@@ -6,156 +6,164 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       :root {
-        --bg-main: #020617;
-        --bg-panel: #020617;
-        --bg-chat: #020617;
-        --bg-bubble-user: #0f766e;
-        --bg-bubble-assistant: #020617;
-        --border-soft: #1f2937;
-        --text-main: #e5e7eb;
+        --bg: #050816;
+        --bg-card: #0b1020;
+        --accent: #12b3ff;
+        --accent-soft: rgba(18, 179, 255, 0.14);
+        --border-subtle: rgba(255, 255, 255, 0.06);
+        --text-main: #f9fafb;
         --text-muted: #9ca3af;
-        --accent: #38bdf8;
-        --accent-soft: rgba(56, 189, 248, 0.1);
+        --chip-bg: rgba(15, 118, 228, 0.16);
+        --chip-border: rgba(59, 130, 246, 0.25);
+        --shadow-soft: 0 24px 60px rgba(0, 0, 0, 0.9);
+        --radius-xl: 24px;
       }
 
       * {
         box-sizing: border-box;
       }
 
+      html,
       body {
         margin: 0;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-          sans-serif;
-        background: radial-gradient(circle at top, #0f172a 0, #020617 50%);
+        padding: 0;
+        background: radial-gradient(circle at top, #111827 0, #020617 55%, #000 100%);
         color: var(--text-main);
-      }
-
-      .app-root {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+          "Segoe UI", sans-serif;
         min-height: 100vh;
-        display: flex;
-        flex-direction: column;
       }
 
-      .main-layout {
-        flex: 1;
-        max-width: 1180px;
-        margin: 0 auto;
-        padding: 16px 16px 80px;
+      body {
         display: flex;
-        flex-direction: column;
-        gap: 16px;
+        justify-content: center;
+        padding: 24px 12px 32px;
       }
 
-      /* ---------- HEADER ---------- */
+      .app-shell {
+        width: 100%;
+        max-width: 1400px;
+      }
 
+      /* Top header with logo */
       .top-bar {
         display: flex;
         align-items: center;
-        justify-content: space-between;
         gap: 16px;
+        margin-bottom: 16px;
       }
 
-      .brand-left {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .brand-logo {
-        height: 42px;
+      .top-bar-logo {
+        height: 40px;
         width: auto;
-        border-radius: 8px;
+        border-radius: 10px;
+        background: #fff;
+        padding: 4px 10px;
+        box-shadow: 0 10px 25px rgba(15, 23, 42, 0.6);
       }
 
-      .brand-text-main {
-        font-size: 1.05rem;
+      .top-bar-title {
         font-weight: 600;
         letter-spacing: 0.02em;
       }
 
-      .brand-text-sub {
-        font-size: 0.78rem;
-        color: var(--text-muted);
-      }
-
-      .clock-card {
-        padding: 10px 14px;
-        border-radius: 14px;
-        background: radial-gradient(circle at top, #0b1120, #020617);
-        border: 1px solid #1f2937;
-        min-width: 180px;
-        text-align: right;
-      }
-
-      .clock-time {
-        font-variant-numeric: tabular-nums;
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: var(--accent);
-      }
-
-      .clock-subtitle {
-        font-size: 0.75rem;
-        color: var(--text-muted);
-        margin-top: 2px;
-      }
-
-      /* ---------- CONTENT LAYOUT ---------- */
-
-      .content-layout {
-        display: grid;
-        grid-template-columns: minmax(0, 1.9fr) minmax(260px, 1.1fr);
-        gap: 16px;
-        align-items: flex-start;
-      }
-
-      @media (max-width: 960px) {
-        .content-layout {
-          grid-template-columns: minmax(0, 1fr);
-        }
-
-        .clock-card {
-          text-align: left;
-        }
-      }
-
-      /* ---------- CHAT PANEL ---------- */
-
-      .chat-panel {
-        background: linear-gradient(to bottom right, #020617, #020617);
-        border-radius: 20px;
-        border: 1px solid var(--border-soft);
-        padding: 16px;
-        box-shadow: 0 18px 35px rgba(15, 23, 42, 0.9);
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-
-      .chat-header-title {
-        font-size: 0.95rem;
-        font-weight: 600;
-        margin-bottom: 4px;
-      }
-
-      .chat-header-sub {
+      .top-bar-subtitle {
         font-size: 0.8rem;
         color: var(--text-muted);
       }
 
-      .chat-messages {
-        margin-top: 8px;
-        padding-top: 4px;
-        padding-right: 4px;
+      /* Layout: chat card + info card */
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 2.3fr) minmax(260px, 1.1fr);
+        gap: 20px;
+      }
+
+      @media (max-width: 1024px) {
+        .layout {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+
+      .card {
+        background: radial-gradient(circle at top left, #111827 0, #020617 55%);
+        border-radius: var(--radius-xl);
+        border: 1px solid var(--border-subtle);
+        box-shadow: var(--shadow-soft);
+        padding: 20px 22px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          circle at top right,
+          rgba(56, 189, 248, 0.12),
+          transparent 55%
+        );
+        opacity: 0.7;
+        pointer-events: none;
+      }
+
+      .card-inner {
+        position: relative;
+        z-index: 1;
+      }
+
+      .chat-title {
+        font-size: 1.02rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+
+      .chat-subtitle {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        margin-bottom: 16px;
+      }
+
+      .helper-chips {
         display: flex;
-        flex-direction: column;
-        gap: 8px;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+
+      .chip {
+        font-size: 0.75rem;
+        padding: 3px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--chip-border);
+        background: var(--chip-bg);
+        color: var(--text-muted);
+      }
+
+      .chat-window {
+        border-radius: 18px;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        background: linear-gradient(
+          135deg,
+          rgba(15, 23, 42, 0.92),
+          rgba(15, 23, 42, 0.98)
+        );
+        padding: 12px 12px 6px;
+        max-height: 58vh;
         overflow-y: auto;
-        max-height: none; /* allow page to grow; main page scrolls */
+        scrollbar-width: thin;
+      }
+
+      @media (max-height: 750px) {
+        .chat-window {
+          max-height: 52vh;
+        }
       }
 
       .message-row {
         display: flex;
+        margin-bottom: 8px;
       }
 
       .message-row.user {
@@ -163,421 +171,420 @@
       }
 
       .message-bubble {
-        max-width: 100%;
-        padding: 9px 12px;
+        max-width: 80%;
+        padding: 8px 11px;
         border-radius: 14px;
-        font-size: 0.86rem;
-        line-height: 1.35;
-        white-space: pre-wrap;
-        word-wrap: break-word;
+        font-size: 0.82rem;
+        line-height: 1.3;
       }
 
-      .user .message-bubble {
-        background: linear-gradient(135deg, #22c55e, #0ea5e9);
-        color: #0f172a;
+      .message-row.user .message-bubble {
+        background: linear-gradient(135deg, #14b8a6, #22c55e);
+        color: #052e16;
         border-bottom-right-radius: 4px;
       }
 
-      .assistant .message-bubble {
-        background: #020617;
-        border: 1px solid #1f2937;
+      .message-row.bot .message-bubble {
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(148, 163, 184, 0.3);
         border-bottom-left-radius: 4px;
+        color: #e5e7eb;
       }
 
-      .time-stamp {
-        margin-top: 2px;
-        font-size: 0.7rem;
-        color: var(--text-muted);
-      }
-
-      .typing-indicator {
-        font-size: 0.8rem;
-        color: var(--text-muted);
-        padding: 4px 2px;
-      }
-
-      .preview-panel {
-        margin-top: 8px;
-        border-radius: 12px;
-        border: 1px solid #1d4ed8;
-        background: radial-gradient(circle at top left, #1d4ed81c, #020617);
-        padding: 8px 10px;
+      .pdf-preview {
+        margin-top: 6px;
         font-size: 0.78rem;
       }
 
-      .preview-heading {
-        font-weight: 600;
-        margin-bottom: 2px;
-        color: #93c5fd;
+      .pdf-preview details {
+        background: rgba(15, 23, 42, 0.9);
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        padding: 6px 8px;
       }
 
-      .preview-body {
-        max-height: 160px;
-        overflow-y: auto;
+      .pdf-preview summary {
+        cursor: pointer;
+        color: #7dd3fc;
+      }
+
+      .pdf-preview pre {
         white-space: pre-wrap;
+        max-height: 220px;
+        overflow-y: auto;
+        margin: 4px 0 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+      }
+
+      .chat-input-area {
+        margin-top: 10px;
       }
 
       .chat-input-row {
-        margin-top: 10px;
-        border-radius: 999px;
-        background: #020617;
-        border: 1px solid #1f2937;
         display: flex;
+        gap: 8px;
         align-items: center;
-        padding: 4px 4px 4px 10px;
-        gap: 6px;
+        margin-bottom: 4px;
       }
 
-      .chat-input-row input[type="text"] {
+      .text-input {
         flex: 1;
-        border: none;
-        outline: none;
-        background: transparent;
+        padding: 10px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        background: rgba(15, 23, 42, 0.95);
         color: var(--text-main);
         font-size: 0.85rem;
+        outline: none;
       }
 
-      .chat-input-row input::placeholder {
-        color: #6b7280;
+      .text-input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
       }
 
       .send-btn {
-        border: none;
-        outline: none;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 7px 16px;
+        min-width: 70px;
         border-radius: 999px;
-        font-size: 0.8rem;
-        font-weight: 500;
-        background: linear-gradient(135deg, #38bdf8, #22c55e);
-        color: #0b1120;
+        padding: 9px 14px;
+        font-size: 0.86rem;
+        border: none;
+        background: linear-gradient(135deg, #0ea5e9, #22c55e);
+        color: #022c22;
+        font-weight: 600;
         cursor: pointer;
-        white-space: nowrap;
+        box-shadow: 0 10px 24px rgba(34, 197, 94, 0.3);
       }
 
-      .send-btn:disabled {
-        opacity: 0.6;
-        cursor: default;
+      .send-btn:active {
+        transform: translateY(1px);
+        box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
       }
 
-      .finance-row {
-        margin-top: 6px;
+      .password-row {
         display: flex;
         align-items: center;
         gap: 8px;
-        font-size: 0.7rem;
+        margin-top: 4px;
+      }
+
+      .password-row label {
+        font-size: 0.74rem;
         color: var(--text-muted);
       }
 
-      .finance-row input {
+      .password-row input {
+        flex: 0 0 180px;
+        padding: 6px 9px;
         border-radius: 999px;
-        border: 1px solid #1f2937;
-        background: #020617;
-        padding: 4px 10px;
+        border: 1px solid rgba(148, 163, 184, 0.55);
+        background: rgba(15, 23, 42, 0.95);
         color: var(--text-main);
-        font-size: 0.7rem;
-        outline: none;
-      }
-
-      /* ---------- SIDE PANEL ---------- */
-
-      .side-panel {
-        border-radius: 20px;
-        border: 1px solid var(--border-soft);
-        background: radial-gradient(circle at top, #020617, #020617);
-        padding: 14px 14px 12px;
-        box-shadow: 0 18px 35px rgba(15, 23, 42, 0.9);
         font-size: 0.8rem;
       }
 
-      .side-title {
-        font-size: 0.86rem;
-        font-weight: 600;
-        margin-bottom: 2px;
-      }
-
-      .side-list {
-        margin: 0;
-        padding-left: 18px;
+      .status-line {
+        margin-top: 4px;
+        font-size: 0.75rem;
         color: var(--text-muted);
       }
 
-      .side-list li {
-        margin: 3px 0;
+      /* Info / clock card */
+      .info-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
       }
 
-      .side-footer {
-        margin-top: 10px;
-        padding-top: 8px;
-        border-top: 1px dashed #1f2937;
+      .info-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+      }
+
+      .clock {
+        background: radial-gradient(circle at top, #020617, #020617);
+        border-radius: 999px;
+        padding: 6px 16px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        display: inline-flex;
+        flex-direction: column;
+        align-items: flex-end;
+        min-width: 120px;
+      }
+
+      .clock-time {
+        font-size: 1.5rem; /* ~30% larger than before */
+        font-weight: 600;
+        letter-spacing: 0.07em;
+      }
+
+      .clock-label {
         font-size: 0.7rem;
         color: var(--text-muted);
       }
 
-      /* ---------- FOOTER ---------- */
+      .info-body {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        line-height: 1.45;
+      }
 
-      .page-footer {
-        max-width: 1180px;
-        margin: 0 auto 14px;
-        padding: 4px 16px 0;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        border-top: 1px solid #111827;
-        padding-top: 8px;
+      .info-body ul {
+        padding-left: 1.1rem;
+        margin: 0.3rem 0 0.4rem;
+      }
+
+      .info-body li {
+        margin-bottom: 0.2rem;
+      }
+
+      .info-footer {
+        margin-top: 10px;
         font-size: 0.72rem;
+        color: var(--text-muted);
+        border-top: 1px solid rgba(148, 163, 184, 0.3);
+        padding-top: 8px;
+      }
+
+      /* Footer credits */
+      .footer {
+        margin-top: 8px;
+        text-align: center;
+        font-size: 0.78rem;
         color: var(--text-muted);
       }
 
-      .designer {
-        font-weight: 500;
-        font-size: 0.83rem; /* ~15% larger than before */
+      .footer-name {
+        font-weight: 600;
+        font-size: 0.9rem; /* ~15% larger */
       }
 
-      .designer span {
-        color: var(--accent);
-      }
-
-      @media (max-width: 720px) {
-        .page-footer {
-          flex-direction: column;
-          align-items: flex-start;
-        }
+      .footer small {
+        display: block;
+        margin-top: 2px;
       }
     </style>
   </head>
+
   <body>
-    <div class="app-root">
-      <main class="main-layout">
-        <!-- HEADER WITH LOGO -->
-        <header class="top-bar">
-          <div class="brand-left">
-            <img src="logo.png" alt="OHLA USA" class="brand-logo" />
-            <div>
-              <div class="brand-text-main">
-                OHLA GPT — I-5 Project Assistant
-              </div>
-              <div class="brand-text-sub">
-                Santa Clarita I-5 North County Enhancement Project
-              </div>
-            </div>
-          </div>
-          <div class="clock-card">
-            <div class="clock-time" id="local-time">--:--:--</div>
-            <div class="clock-subtitle">Local time</div>
-          </div>
-        </header>
-
-        <!-- MAIN CONTENT -->
-        <section class="content-layout">
-          <!-- Chat -->
-          <section class="chat-panel">
-            <div>
-              <div class="chat-header-title">
-                Hello, this is the OHLA I-5 project assistant. How can I help
-                you today?
-              </div>
-              <div class="chat-header-sub">
-                Ask about the I-5 project files, RFIs, PCOs, permits, specs, or
-                submittals.
-              </div>
-            </div>
-
-            <div id="chat-messages" class="chat-messages"></div>
-
-            <div id="typing-indicator" class="typing-indicator" style="display: none;">
-              OHLA GPT is thinking…
-            </div>
-
-            <div class="chat-input-row">
-              <input
-                id="user-input"
-                type="text"
-                placeholder="Ask about the I-5 project files, RFIs, PCOs, permits, specs, or submittals..."
-                autocomplete="off"
-              />
-              <button id="send-btn" class="send-btn">Send</button>
-            </div>
-
-            <div class="finance-row">
-              <span>Admin password for financial questions (optional):</span>
-              <input
-                id="finance-password"
-                type="password"
-                placeholder="••••••••"
-              />
-            </div>
-          </section>
-
-          <!-- Side info -->
-          <aside class="side-panel">
-            <div class="side-title">How this assistant works</div>
-            <ul class="side-list">
-              <li>
-                Uses OHLA I-5 project documents: permits, POTD, RFIs, PCOs,
-                subcontractor contracts, project contract, submittals, Caltrans &
-                Metro specs.
-              </li>
-              <li>
-                First tries to answer from project files. If the answer isn’t
-                clear, it may fall back to general civil-construction
-                knowledge.
-              </li>
-              <li>
-                Some documents are read using AWS Textract. You may see a small
-                <em>“extracted text preview”</em> when a specific file is used.
-              </li>
-              <li>
-                Financial &amp; cost-related questions require admin permission
-                and may ask for a password.
-              </li>
-            </ul>
-
-            <div class="side-footer">
-              This assistant is a helper only and does not replace official
-              contract documents. Always verify critical information against
-              signed plans/specs.
-            </div>
-          </aside>
-        </section>
-      </main>
-
-      <footer class="page-footer">
-        <div class="designer">
-          Designed by: <span>Ibrahim Altamimi</span>
-        </div>
+    <div class="app-shell">
+      <!-- Top bar with logo outside card -->
+      <div class="top-bar">
+        <img src="logo.png" alt="OHLA Logo" class="top-bar-logo" />
         <div>
-          OHLA USA, Inc., I-5 Project — California
+          <div class="top-bar-title">OHLA GPT — I-5 Project Assistant</div>
+          <div class="top-bar-subtitle">
+            Santa Clarita I-5 North County Enhancement Project
+          </div>
         </div>
-      </footer>
+      </div>
+
+      <div class="layout">
+        <!-- Chat card -->
+        <div class="card">
+          <div class="card-inner">
+            <div class="chat-title">
+              Hello, this is the OHLA I-5 project assistant. How can I help you
+              today?
+            </div>
+            <div class="chat-subtitle">
+              Ask about the I-5 project files, RFIs, PCOs, permits, specs, or
+              submittals.
+            </div>
+
+            <div class="helper-chips">
+              <div class="chip">Examples: "Summarize RFI-140"</div>
+              <div class="chip">"Where is the POTD for 2025-11-01?"</div>
+              <div class="chip">"What does this encroachment permit cover?"</div>
+            </div>
+
+            <div id="chat-window" class="chat-window"></div>
+
+            <div class="chat-input-area">
+              <div class="chat-input-row">
+                <input
+                  id="user-input"
+                  type="text"
+                  class="text-input"
+                  placeholder="Ask about the I-5 project files, RFIs, PCOs, permits, specs, or submittals..."
+                />
+                <button id="send-btn" class="send-btn">Send</button>
+              </div>
+
+              <div class="password-row">
+                <label for="password-input"
+                  >Admin password for financial questions (optional):</label
+                >
+                <input
+                  id="password-input"
+                  type="password"
+                  autocomplete="off"
+                />
+              </div>
+
+              <div id="status-line" class="status-line"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Info / clock card -->
+        <div class="card">
+          <div class="card-inner">
+            <div class="info-header">
+              <div class="info-title">How this assistant works</div>
+              <div class="clock">
+                <div id="clock-time" class="clock-time">--:--:--</div>
+                <div class="clock-label">Local time</div>
+              </div>
+            </div>
+
+            <div class="info-body">
+              <ul>
+                <li>
+                  Uses OHLA I-5 project documents: permits, POTD, RFIs, PCOs,
+                  subcontractor contracts, project contract submittals, Caltrans
+                  &amp; Metro specs.
+                </li>
+                <li>
+                  First tries to answer from project files. If the answer isn’t
+                  clear, it may fall back to general civil-construction
+                  knowledge.
+                </li>
+                <li>
+                  Some documents are read using AWS Textract. You may see an
+                  “extracted text preview” when a specific file is used.
+                </li>
+                <li>
+                  Financial &amp; cost-related questions require admin
+                  permission and may ask for a password.
+                </li>
+              </ul>
+
+              <div class="info-footer">
+                This assistant is a helper only and does not replace official
+                contract documents. Always verify critical information against
+                signed plans/specs and approved submittals.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">
+        Designed by:
+        <span class="footer-name">Ibrahim Altamimi</span>
+        <small>OHLA USA, Inc. — I-5 Project — California</small>
+      </div>
     </div>
 
     <script>
-      const messagesEl = document.getElementById("chat-messages");
-      const inputEl = document.getElementById("user-input");
+      const chatWindow = document.getElementById("chat-window");
+      const userInput = document.getElementById("user-input");
+      const passwordInput = document.getElementById("password-input");
       const sendBtn = document.getElementById("send-btn");
-      const typingEl = document.getElementById("typing-indicator");
-      const financeEl = document.getElementById("finance-password");
+      const statusLine = document.getElementById("status-line");
 
-      function appendMessage(role, text) {
+      function appendMessage(role, text, pdfPreviewData) {
         const row = document.createElement("div");
-        row.className = `message-row ${role}`;
+        row.className = "message-row " + role;
 
         const bubble = document.createElement("div");
         bubble.className = "message-bubble";
         bubble.textContent = text;
 
         row.appendChild(bubble);
+        chatWindow.appendChild(row);
 
-        const container = document.createElement("div");
-        container.appendChild(row);
+        if (pdfPreviewData && role === "bot" && pdfPreviewData.preview) {
+          const wrap = document.createElement("div");
+          wrap.className = "pdf-preview";
 
-        messagesEl.appendChild(container);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
-      }
+          const details = document.createElement("details");
+          const summary = document.createElement("summary");
+          summary.textContent =
+            "Extracted text preview from " + pdfPreviewData.fileName;
+          const pre = document.createElement("pre");
+          pre.textContent = pdfPreviewData.preview;
 
-      function appendPreview(source, text) {
-        if (!text) return;
-        const panel = document.createElement("div");
-        panel.className = "preview-panel";
+          details.appendChild(summary);
+          details.appendChild(pre);
+          wrap.appendChild(details);
+          chatWindow.appendChild(wrap);
+        }
 
-        const heading = document.createElement("div");
-        heading.className = "preview-heading";
-        heading.textContent = `Extracted text preview from "${source}"`;
-
-        const body = document.createElement("div");
-        body.className = "preview-body";
-        body.textContent = text;
-
-        panel.appendChild(heading);
-        panel.appendChild(body);
-
-        messagesEl.appendChild(panel);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        chatWindow.scrollTop = chatWindow.scrollHeight;
       }
 
       async function sendMessage() {
-        const text = inputEl.value.trim();
-        if (!text) return;
+        const msg = userInput.value.trim();
+        if (!msg) return;
 
-        appendMessage("user", text);
-        inputEl.value = "";
-
-        typingEl.style.display = "block";
-        sendBtn.disabled = true;
+        appendMessage("user", msg);
+        userInput.value = "";
+        statusLine.textContent = "Thinking with OHLA project files…";
 
         try {
-          const resp = await fetch("/api/chat", {
+          const response = await fetch("/api/chat", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              message: text,
-              financePassword: financeEl.value || "",
+              message: msg,
+              financePassword: passwordInput.value || "",
             }),
           });
 
-          const data = await resp.json();
+          const data = await response.json();
 
-          typingEl.style.display = "none";
-          sendBtn.disabled = false;
+          const pdfInfo =
+            data.pdfPreview && data.pdfFileName
+              ? { preview: data.pdfPreview, fileName: data.pdfFileName }
+              : null;
 
-          if (data && data.answer) {
-            appendMessage("assistant", data.answer);
+          appendMessage("bot", data.answer || "(no answer)", pdfInfo);
+
+          if (data.needsPassword) {
+            statusLine.textContent =
+              "Financial question detected. Please enter the admin password and ask again.";
+          } else if (data.pdfNote) {
+            statusLine.textContent = data.pdfNote;
+          } else if (pdfInfo) {
+            statusLine.textContent =
+              "Answer used extracted text from " + data.pdfFileName + ".";
           } else {
-            appendMessage(
-              "assistant",
-              "I’m sorry, I couldn’t generate a response."
-            );
-          }
-
-          if (data && data.previewText) {
-            appendPreview(data.previewSource || "project document", data.previewText);
+            statusLine.textContent = "";
           }
         } catch (err) {
           console.error(err);
-          typingEl.style.display = "none";
-          sendBtn.disabled = false;
           appendMessage(
-            "assistant",
-            "Something went wrong while talking to the server."
+            "bot",
+            "Sorry, something went wrong while talking to the server."
           );
+          statusLine.textContent = "";
         }
       }
 
       sendBtn.addEventListener("click", sendMessage);
-      inputEl.addEventListener("keydown", (e) => {
+      userInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           sendMessage();
         }
       });
 
-      // simple local time clock
+      // simple live clock
       function updateClock() {
-        const el = document.getElementById("local-time");
-        if (!el) return;
+        const el = document.getElementById("clock-time");
         const now = new Date();
-        const pad = (n) => String(n).padStart(2, "0");
-        el.textContent =
-          pad(now.getHours()) +
-          ":" +
-          pad(now.getMinutes()) +
-          ":" +
-          pad(now.getSeconds());
+        const hh = String(now.getHours()).padStart(2, "0");
+        const mm = String(now.getMinutes()).padStart(2, "0");
+        const ss = String(now.getSeconds()).padStart(2, "0");
+        el.textContent = `${hh}:${mm}:${ss}`;
       }
-      setInterval(updateClock, 1000);
       updateClock();
-
-      // initial welcome from assistant
-      appendMessage(
-        "assistant",
-        "Hello! I am your I-5 project assistant. Ask me about OHLA USA I-5 project files, specs, RFIs, PCOs, and submittals."
-      );
+      setInterval(updateClock, 1000);
     </script>
   </body>
 </html>
