@@ -18,7 +18,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// ========== AWS SDK (S3 only – NO TEXTRACT) ==========
+// ========== AWS SDK (S3 only) ==========
 const AWS_REGION = process.env.AWS_REGION || "us-east-2";
 const S3_BUCKET = process.env.S3_BUCKET;
 const S3_PREFIX = process.env.S3_PREFIX || "";
@@ -163,7 +163,7 @@ function findBestMatchingS3Key(question) {
       if (q.includes(w)) score += 1;
     }
 
-    // Slight bonus if the raw filename (including dots) appears directly
+    // Slight bonus if raw filename appears directly
     if (question.toLowerCase().includes(getFileNameFromKey(key).toLowerCase())) {
       score += 3;
     }
@@ -174,10 +174,7 @@ function findBestMatchingS3Key(question) {
     }
   }
 
-  // require at least a small score so we don’t match nonsense
-  if (bestScore >= 2) {
-    return bestKey;
-  }
+  if (bestScore >= 2) return bestKey;
   return null;
 }
 
@@ -196,10 +193,6 @@ async function downloadS3Object(key) {
 
 /**
  * Extract text from various file types WITHOUT Textract.
- * - PDF  -> pdf-parse
- * - XLSX -> XLSX library (joined cell values)
- * - TXT  -> raw string
- * Other types return null (we’ll fall back to general context).
  */
 async function extractTextFromS3Key(key) {
   try {
@@ -240,13 +233,59 @@ async function extractTextFromS3Key(key) {
       return buf.toString("utf-8");
     }
 
-    // Unsupported type for now
     console.log(`[OCR] Unsupported file type for OCR: ${fileName}`);
     return null;
   } catch (err) {
     console.error(`[OCR] Error extracting text for ${key}:`, err);
     return null;
   }
+}
+
+/**
+ * From a long document, pick the most relevant paragraphs for the question.
+ * This keeps the context focused and makes answers more precise.
+ */
+function getRelevantExcerpt(fullText, question, maxChars = 12000) {
+  if (!fullText) return null;
+  if (fullText.length <= maxChars) return fullText;
+
+  const qWords = new Set(
+    normalize(question)
+      .split(/\s+/)
+      .filter((w) => w.length > 2)
+  );
+
+  const paragraphs = fullText.split(/\n{2,}/); // split on blank lines
+  const scored = paragraphs.map((p) => {
+    const words = normalize(p).split(/\s+/);
+    let score = 0;
+    for (const w of words) {
+      if (qWords.has(w)) score++;
+    }
+    return { p: p.trim(), score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+
+  let chosen = [];
+  let total = 0;
+  for (const { p, score } of scored) {
+    // once we have at least one paragraph, skip completely irrelevant ones
+    if (chosen.length > 0 && score === 0) break;
+
+    if (!p) continue;
+    if (total + p.length > maxChars) continue;
+    chosen.push(p);
+    total += p.length + 2;
+    if (total >= maxChars) break;
+  }
+
+  if (chosen.length === 0) {
+    // fallback: just take the beginning
+    return fullText.slice(0, maxChars);
+  }
+
+  return chosen.join("\n\n");
 }
 
 // ========== Middleware ==========
@@ -273,9 +312,10 @@ app.post("/api/chat", async (req, res) => {
       }
     }
 
-    // --- Try to match a specific S3 file based on the question ---
+    // --- Try to match a specific S3 file ---
     let matchedKey = null;
     let extractedText = null;
+    let relevantText = null;
     let extractionNote = "";
     let textPreview = null;
 
@@ -296,16 +336,18 @@ app.post("/api/chat", async (req, res) => {
             matchedKey
           )}". I will answer using general project knowledge instead.`;
         } else {
-          // Make a short preview for UI (first ~800 chars)
+          relevantText = getRelevantExcerpt(extractedText, userMessage, 12000);
+
           textPreview =
-            extractedText.length > 800
-              ? extractedText.slice(0, 800) + " ..."
-              : extractedText;
+            relevantText && relevantText.length > 800
+              ? relevantText.slice(0, 800) + " ..."
+              : relevantText || null;
 
           console.log(
             `[OHLA-GPT] Extracted text length for "${getFileNameFromKey(
               matchedKey
-            )}": ${extractedText.length} characters`
+            )}": ${extractedText.length} characters (using ${relevantText?.length ||
+              0} chars as focused context)`
           );
         }
       } else {
@@ -316,17 +358,25 @@ app.post("/api/chat", async (req, res) => {
     }
 
     // --- Build system prompt ---
+    const fileName = matchedKey ? getFileNameFromKey(matchedKey) : null;
+
     let systemPrompt = `
 You are "OHLA GPT — I-5 Project Assistant" for the Santa Clarita I-5 North County Enhancement Project.
 
 You have access to:
 - A high-level summary of project documents stored in an AWS S3 bucket (POTDs, permits, RFIs, PCOs, contracts, submittals, specs, etc.).
-- When available, extracted text from a specific document that the user is asking about.
+- When available, a focused excerpt of text extracted from a specific document the user is asking about.
 - General civil-construction and project-controls knowledge.
 
-If the user seems to refer to a specific file and I provide extracted text for that file, you MUST treat that text as the primary source of truth for your answer.
+If a focused document excerpt is provided, you MUST:
+- Treat that excerpt as the primary source of truth.
+- Answer the user's question by carefully reading that text.
+- Explicitly extract the requested information (for example: list all dates, summarize key conditions, identify requirements, etc.).
+- If the information the user asks for is not present in the excerpt, clearly say that it cannot be found instead of guessing.
 
-If no extracted text is available, first try to answer using the project context summary. If the answer still isn't clear, you may fall back to general knowledge, but clearly say when you are doing that.
+When listing items (dates, requirements, conditions, etc.), use clear bullet points.
+
+If no document excerpt is provided, first try to answer using the project context summary. Only if that is insufficient, fall back to general civil-construction knowledge and say that you are doing so.
 
 If the question asks for project financial / cost information and the user did not provide the correct admin password, respond ONLY with:
 "Financial questions need admin permission."
@@ -335,17 +385,13 @@ If the question asks for project financial / cost information and the user did n
     systemPrompt += `\n\nProject file summary (from S3):\n\n${s3IndexSummary ||
       "No S3 index is currently loaded."}\n`;
 
-    if (extractedText) {
-      systemPrompt += `\n\nExtracted content from the relevant document "${getFileNameFromKey(
-        matchedKey
-      )}":\n\n${extractedText.slice(0, 12000)}\n\n(End of extracted text.)\n`;
-    } else if (matchedKey && !extractedText) {
-      systemPrompt += `\n\nNote: Text could not be extracted from "${getFileNameFromKey(
-        matchedKey
-      )}". Use project context and general knowledge only.\n`;
+    if (relevantText && fileName) {
+      systemPrompt += `\n\nThe user is asking about the specific document "${fileName}". Here is the focused excerpt from that document that should be used for answering the question:\n\n${relevantText}\n\n(End of excerpt.)\n`;
+    } else if (fileName && !relevantText) {
+      systemPrompt += `\n\nNote: Text could not be extracted from "${fileName}". Use project context and general knowledge only.\n`;
     }
 
-    // Optional: include JSON index if we have it
+    // Optional machine-readable index
     const indexJsonSnippet = s3IndexJson
       ? JSON.stringify(s3IndexJson).slice(0, 6000)
       : null;
@@ -354,7 +400,7 @@ If the question asks for project financial / cost information and the user did n
       systemPrompt += `\nAdditional machine-readable index data:\n${indexJsonSnippet}\n`;
     }
 
-    // --- Call OpenAI (text model) ---
+    // --- Call OpenAI ---
     const messages = [
       {
         role: "system",
@@ -369,17 +415,17 @@ If the question asks for project financial / cost information and the user did n
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages,
-      temperature: 0.2,
+      temperature: 0.15, // a bit lower for more deterministic answers
     });
 
     const answer = completion.choices[0].message.content.trim();
 
     res.json({
-      fromFiles: !!extractedText,
+      fromFiles: !!relevantText,
       answer,
       needsPassword: false,
       matchedFileKey: matchedKey || null,
-      matchedFileName: matchedKey ? getFileNameFromKey(matchedKey) : null,
+      matchedFileName: fileName || null,
       ocrNote: extractionNote || null,
       sourceTextPreview: textPreview || null,
     });
@@ -412,6 +458,6 @@ app.get("*", (req, res) => {
   await loadS3Index();
 
   app.listen(PORT, () => {
-    console.log(`OHLA GPT (S3 hybrid, OpenAI OCR) running on port ${PORT}`);
+    console.log(`OHLA GPT (S3 hybrid, focused context) running on port ${PORT}`);
   });
 })();
